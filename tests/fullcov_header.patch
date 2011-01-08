@@ -1,0 +1,25 @@
+--- a/mpdecimal.h	2010-11-15 12:28:32.000000000 +0100
++++ b/mpdecimal.h	2010-11-15 12:30:04.000000000 +0100
+@@ -110,8 +110,9 @@
+ typedef uint64_t mpd_uuint_t; /* double width unsigned mod type */
+ #endif
+ 
+-#define MPD_SIZE_MAX SIZE_MAX
+-typedef size_t mpd_size_t; /* unsigned size type */
++/* enable CONFIG_32+ANSI on 64-bit platforms without resorting to -m32 */
++#define MPD_SIZE_MAX UINT32_MAX
++typedef uint32_t mpd_size_t; /* unsigned size type */
+ 
+ /* type for dec->len, dec->exp, ctx->prec */
+ #define MPD_SSIZE_MAX INT32_MAX
+@@ -139,8 +140,8 @@
+ /* END CONFIG_32 */
+ 
+ 
+-#if MPD_SIZE_MAX != MPD_UINT_MAX
+-  #error "unsupported platform: need mpd_size_t == mpd_uint_t"
++#if SIZE_MAX < MPD_SIZE_MAX
++  #error "unsupported platform: need size_t >= mpd_size_t"
+ #endif
+ 
+ 
