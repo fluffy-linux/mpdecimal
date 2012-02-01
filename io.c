@@ -309,7 +309,7 @@ conversion_error:
 
 /* print the exponent to a string */
 static inline char *
-exp_to_string(char *s, mpd_ssize_t x, int print_sign)
+exp_to_string(char *s, mpd_ssize_t x)
 {
 	mpd_ssize_t q, d;
 	char sign = '+';
@@ -319,9 +319,7 @@ exp_to_string(char *s, mpd_ssize_t x, int print_sign)
 		sign = '-';
 		x = -x;
 	}
-
-	if (print_sign)
-		*s++ = sign;
+	*s++ = sign;
 
 	j = mpd_exp_digits(x) - 1;
 
@@ -589,7 +587,7 @@ _mpd_to_string(const mpd_t *dec, int flags, mpd_ssize_t zeroexp)
 			/* space: expdigits+2 */
 			mpd_ssize_t x = (zeroexp != MPD_SSIZE_MAX) ? zeroexp : ldigits-dplace;
 			*cp++ = (flags&MPD_FMT_UPPER) ? 'E' : 'e';
-			cp = exp_to_string(cp, x, 1);
+			cp = exp_to_string(cp, x);
 		}
 
 		if (flags&MPD_FMT_PERCENT) {

@@ -26,6 +26,7 @@
  */
 
 
+#include "mpdecimal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,7 +34,6 @@
 #include <assert.h>
 #include "bits.h"
 #include "constants.h"
-#include "mpdecimal.h"
 #include "mptypes.h"
 #include "typearith.h"
 #include "transpose.h"
@@ -288,8 +288,8 @@ transpose_pow2_c(uint8_t *matrix, mpd_size_t rows, mpd_size_t cols)
 
 
 #include <time.h>
-#define UMOD_ARRAY (1ULL<<28)
-#define UCHAR_ARRAY (1ULL<<29)
+#define UMOD_ARRAY ((mpd_uint_t)1<<28)
+#define UCHAR_ARRAY ((mpd_uint_t)1<<29)
 
 /* The faster in-place functions are tested against std_trans(). */
 static int
@@ -326,8 +326,8 @@ testit_uint(void (* func)(mpd_uint_t *, mpd_size_t, mpd_size_t), mpd_size_t rows
 
 	for (i = 0; i < msize; i++) {
 		if (a[i] != dest[i]) {
-			fprintf(stderr, "FAIL: a[%"PRI_mpd_size_t"] = %"PRI_mpd_size_t
-                                        "\tdest[%"PRI_mpd_size_t"] = %"PRI_mpd_size_t"\n",
+			fprintf(stderr, "FAIL: a[%"PRI_mpd_size_t"] = %"PRI_mpd_uint_t
+                                        "\tdest[%"PRI_mpd_size_t"] = %"PRI_mpd_uint_t"\n",
 			        i, a[i], i, dest[i]);
 			exit(1);
 		}

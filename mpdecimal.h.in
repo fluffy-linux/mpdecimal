@@ -47,7 +47,11 @@ extern "C" {
 #if !defined(__GNUC_STDC_INLINE__)
   #define __GNUC_STDC_INLINE__
 #endif
-#define UNUSED __attribute__((unused))
+#if defined(__GNUC__) && !defined(__INTEL_COMPILER)
+  #define UNUSED __attribute__((unused))
+#else
+  #define UNUSED
+#endif
 
 
 /******************************************************************************/
@@ -341,10 +345,12 @@ void mpd_qmaxcoeff(mpd_t *result, const mpd_context_t *ctx, uint32_t *status);
 /* quietly assign a C integer type to an mpd_t */
 void mpd_qset_ssize(mpd_t *result, mpd_ssize_t a, const mpd_context_t *ctx, uint32_t *status);
 void mpd_qset_i32(mpd_t *result, int32_t a, const mpd_context_t *ctx, uint32_t *status);
-void mpd_qset_i64(mpd_t *result, int64_t a, const mpd_context_t *ctx, uint32_t *status);
 void mpd_qset_uint(mpd_t *result, mpd_uint_t a, const mpd_context_t *ctx, uint32_t *status);
 void mpd_qset_u32(mpd_t *result, uint32_t a, const mpd_context_t *ctx, uint32_t *status);
+#ifndef LEGACY_COMPILER
+void mpd_qset_i64(mpd_t *result, int64_t a, const mpd_context_t *ctx, uint32_t *status);
 void mpd_qset_u64(mpd_t *result, uint64_t a, const mpd_context_t *ctx, uint32_t *status);
+#endif
 
 /* quietly assign a C integer type to an mpd_t with a static coefficient */
 void mpd_qsset_ssize(mpd_t *result, mpd_ssize_t a, const mpd_context_t *ctx, uint32_t *status);
@@ -481,10 +487,12 @@ void mpd_sset_uint(mpd_t *result, mpd_uint_t a, mpd_context_t *ctx);
 void mpd_sset_u32(mpd_t *result, uint32_t a, mpd_context_t *ctx);
 void mpd_set_ssize(mpd_t *result, mpd_ssize_t a, mpd_context_t *ctx);
 void mpd_set_i32(mpd_t *result, int32_t a, mpd_context_t *ctx);
-void mpd_set_i64(mpd_t *result, int64_t a, mpd_context_t *ctx);
 void mpd_set_uint(mpd_t *result, mpd_uint_t a, mpd_context_t *ctx);
 void mpd_set_u32(mpd_t *result, uint32_t a, mpd_context_t *ctx);
+#ifndef LEGACY_COMPILER
+void mpd_set_i64(mpd_t *result, int64_t a, mpd_context_t *ctx);
 void mpd_set_u64(mpd_t *result, uint64_t a, mpd_context_t *ctx);
+#endif
 mpd_ssize_t mpd_get_ssize(const mpd_t *a, mpd_context_t *ctx);
 mpd_uint_t mpd_get_uint(const mpd_t *a, mpd_context_t *ctx);
 mpd_uint_t mpd_abs_uint(const mpd_t *a, mpd_context_t *ctx);

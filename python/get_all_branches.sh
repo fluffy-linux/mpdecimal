@@ -5,17 +5,29 @@
 #
 # Directory structure:
 #
-#   svndir/release25-maint
-#   svndir/release26-maint
+#   hgdir/release25-maint
+#   hgdir/release26-maint
 #   ...
 #
-#   svndir/mpdecimal/python  ->  run script from this directory
+#   hgdir/mpdecimal/python  ->  run script from this directory
 #
 
-cd ../../
-for branch in release25-maint release26-maint release27-maint release31-maint py3k; do
-   svn co http://svn.python.org/projects/python/branches/$branch
-done
+branches="2.5 2.6 2.7 3.1 3.2 default"
 
+cd ../../
+
+if ! [ -d master ]; then
+    hg clone -U http://hg.python.org/cpython master
+else
+    cd master && hg pull && cd ..
+fi
+
+for b in $branches; do
+    if ! [ -d "$b" ]; then
+        hg clone master "$b" -u "$b"
+    else
+        cd "$b" && hg pull -u && cd ..
+    fi
+done
 
 

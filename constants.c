@@ -92,8 +92,8 @@
   /* crt.c */
   const mpd_uint_t INV_P1_MOD_P2   = 2013265901UL;
   const mpd_uint_t INV_P1P2_MOD_P3 = 54UL;
-  const mpd_uint_t LH_P1P2 = 4127195137ULL;  /* (P1*P2) % 2^32 */
-  const mpd_uint_t UH_P1P2 = 990904320ULL;   /* (P1*P2) / 2^32 */
+  const mpd_uint_t LH_P1P2 = 4127195137UL;  /* (P1*P2) % 2^32 */
+  const mpd_uint_t UH_P1P2 = 990904320UL;   /* (P1*P2) / 2^32 */
 
   /* transpose.c */
   const mpd_size_t mpd_bits[32] = {

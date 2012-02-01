@@ -26,6 +26,7 @@
  */
 
 
+#include "mpdecimal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,7 +38,6 @@
 #include <time.h>
 #include "io.h"
 #include "memory.h"
-#include "mpdecimal.h"
 #include "mptest.h"
 #include "mptypes.h"
 #include "malloc_fail.h"
@@ -3871,7 +3871,7 @@ _uint_MpdCtx(char **token, mpd_uint_t (*func)(const mpd_t *, mpd_context_t *), m
 	ctx->status = 0;
 
 	calc_uint = func(tmp, ctx);
-	snprintf(calc, 23, "%" PRI_mpd_size_t, calc_uint);
+	snprintf(calc, 23, "%" PRI_mpd_uint_t, calc_uint);
 
 	/* compare the calculated result to the expected result */
 	compare_expected(calc, expected, expstatus, token[0], ctx);

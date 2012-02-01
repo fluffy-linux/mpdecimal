@@ -56,15 +56,17 @@ python setup.py build
 ## -----------------
 
 #
-# Get the tests (requires svn):
+# Get the tests (requires hg):
 #
 # Most of the tests do not have a redistribution license, so
 # they are not included in mpdecimal.
 #
 # It is vital to use the 'decimaltestdata' directory from the
-# py3k svn branch. Earlier versions (especially 2.5) of this
-# directory may contain bugs, causing several tests to fail.
+# cpython default branch. Earlier versions (especially 2.5) of
+# this directory may contain bugs, causing several tests to fail.
 #
+# Since mercurial does not support directory checkouts, the
+# checkout procedure is highly awkward.
 cd python && ./gettests.sh # gettests.bat
 
 
@@ -76,6 +78,7 @@ cd python && ./gettests.sh # gettests.bat
 # Python-2.7.x: test_cdecimal2.py
 # Python-3.1.x: test_cdecimal3.py
 # Python-3.2.x: test_cdecimal3.py
+# Python-3.3.x: test_cdecimal3.py
 #
 python test_cdecimal2.py # test_cdecimal2.5.py test_cdecimal3.py
 
@@ -83,15 +86,17 @@ python test_cdecimal2.py # test_cdecimal2.5.py test_cdecimal3.py
 #
 # Tests against decimal.py:
 #
-# Python-2.x.y: deccheck2.py, ctx-deccheck2.py
-# Python-3.x.y: deccheck3.py, ctx-deccheck3.py
-#
 # Note for Python 2.5.0 through 2.5.4: decimal.py contains several bugs
 # that make the tests impractical to run. It is recommended to upgrade
 # to Python 2.5.5 or 2.6.6.
 #
-python deccheck2.py # deccheck3.py
-python ctx-deccheck2.py # ctx-deccheck3.py
+
+# Python-2.x:
+python deccheck2.py
+python ctx-deccheck2.py
+
+# Python-3.x:
+python deccheck3.py
 
 
 ## -----------------------
@@ -111,15 +116,17 @@ python ctx-deccheck2.py --all
 ## ---------------
 
 #
-#   1) Make sure that you have 'decimaltestdata' from py3k svn.
+#   1) Make sure that you have 'decimaltestdata' from the cpython
+#      default branch.
 #
-#   2) The author runs all long tests against these svn branches:
+#   2) The author runs all long tests against these hg branches:
 #
-#          release25-maint
-#          release26-maint
-#          release27-maint
-#          release31-maint
-#          py3k
+#          2.5
+#          2.6
+#          2.7
+#          3.1
+#          3.2
+#          default
 #
 #      Earlier micro versions (say 2.6.1 vs 2.6.6) often have bugs
 #      in decimal.py. deccheck tries to skip known issues, but the

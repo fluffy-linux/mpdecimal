@@ -20,6 +20,11 @@ $VALGRIND ./cov
 $VALGRIND ./test_transpose
 $VALGRIND ./fntcov
 
+if [ -f deccheck ]; then
+    printf "\nRunning decNumber tests ... \n\n"
+    $VALGRIND ./deccheck
+fi
+
 printf "\nRunning long tests ... \n\n"
 ./ppro_mulmod
 if [ -f mpd_mpz_add ]; then

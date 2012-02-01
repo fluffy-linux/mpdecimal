@@ -30,6 +30,7 @@
 #define IO_H
 
 
+#include <errno.h>
 #include "mpdecimal.h"
 
 

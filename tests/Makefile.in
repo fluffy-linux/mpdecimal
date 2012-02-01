@@ -86,6 +86,13 @@ mpd_mpz_sub:\
 mpd_mpz_sub.c $(SRCDIR)/mpdecimal.h $(SRCDIR)/mptypes.h $(SRCDIR)/libmpdec.a
 	$(CC) $(INC) $(CFLAGS) -o mpd_mpz_sub mpd_mpz_sub.c $(SRCDIR)/libmpdec.a -lm -lgmp
 
+# tests against decNumber
+deccheck:\
+deccheck.c $(SRCDIR)/io.h  $(SRCDIR)/mpdecimal.h $(SRCDIR)/memory.h \
+           $(SRCDIR)/mptest.h $(SRCDIR)/mptypes.h $(SRCDIR)/libmpdec.a
+	$(CC) $(INC) -IdecNumber $(CFLAGS) -o deccheck deccheck.c \
+	decNumber/decNumber.c decNumber/decContext.c $(SRCDIR)/libmpdec.a -lm
+
 
 FORCE:
 
@@ -94,5 +101,8 @@ clean: FORCE
 	      runtest cov fntcov karatsuba_fnt karatsuba_fnt2 ppro_mulmod \
               test_transpose mpd_mpz_add mpd_mpz_divmod mpd_mpz_mul mpd_mpz_sub
 
+distclean: FORCE
+	$(MAKE) clean
+	rm -rf Makefile deccheck dectest.zip testdata decNumber*
 
 

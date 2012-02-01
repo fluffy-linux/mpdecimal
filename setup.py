@@ -393,14 +393,14 @@ def cdecimal_ext(machine):
 
 setup (
     name = 'cdecimal',
-    version = '2.2',
+    version = '2.3',
     description = DESCRIPTION,
     long_description = LONG_DESCRIPTION,
     url = 'http://www.bytereef.org/mpdecimal/index.html',
     author = 'Stefan Krah',
     author_email = 'skrah@bytereef.org',
     license = 'BSD License',
-    download_url = 'http://www.bytereef.org/software/cdecimal-2.2.tar.gz',
+    download_url = 'http://www.bytereef.org/software/mpdecimal/releases/cdecimal-2.3.tar.gz',
     keywords = ["decimal", "floating point", "correctly-rounded",
                 "arithmetic", "arbitrary precision"],
     platforms = ["Many"],
@@ -427,7 +427,7 @@ setup (
 )
 
 
-PATHLIST = glob("build/lib.*/cdecimal.*")
+PATHLIST = glob("build/lib.*/cdecimal*")
 if PATHLIST:
     CDECIMAL = PATHLIST[0]
     copy2(CDECIMAL, "python")

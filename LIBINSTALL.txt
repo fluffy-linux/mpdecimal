@@ -138,71 +138,135 @@ cd tests && ./runalltests.sh
 #           Windows: library build instructions for Visual C
 # ======================================================================
 
-copy Makefile.vc Makefile
+# ---------------------------------------
+#  Get the official tests (do not skip!)
+# ---------------------------------------
 
-
-# 64-bit OS (fastest version, use whenever possible):
 #
-# Find the path to vcvarsamd64.bat (or vcvars64.bat) and execute it. Example:
-
-"C:\Program Files (x86)\Microsoft Visual Studio 9.0\VC\bin\amd64\vcvarsamd64.bat"
-
-# Build static library:
-nmake MACHINE=x64
-
-# Build DLL:
-nmake MACHINE=x64 DLL=1
-
-# Visual Studio Professional, profile guided optimization:
-nmake MACHINE=x64 DLL=1 profile
-
-
-# 32-bit OS:
+# If the command line programs wget and unzip are installed and in
+# the PATH, the official tests should be downloaded automatically
+# as part of `make MACHINE=xyz check`. wget and unzip are part of
+# a Cygwin install.
 #
-# Find the path to vcvars32.bat and execute it. Example:
-"C:\Program Files\Microsoft Visual Studio 9.0\VC\bin\vcvars32.bat"
-
-# Build static library:
-nmake MACHINE=ppro
-
-# Build DLL:
-nmake MACHINE=ppro DLL=1
-
-# Visual Studio Professional, profile guided optimization:
-nmake MACHINE=ppro DLL=1 profile
-
-
-# ---------------
-#  Using the DLL
-# ---------------
-
-# Specify the import library on the command line and define USE_DLL:
-
-cl.exe /DUSE_DLL application.c libmpdec-2.2.dll.lib
-
-
-# ----------------------
-#  Test (do not skip!):
-# ----------------------
-
-# If the command line svn program is installed and in the PATH, the
-# official tests should be downloaded automatically from the Python
-# svn repository.
-#
-# Otherwise, download:
+# Otherwise, download manually:
 #
 #    http://speleotrove.com/decimal/dectest.zip
 #
 # Extract the archive so that you have this directory structure:
 #
-#    <mpdecimal directory>\tests\testdata\*.decTest
+#    mpdecimal-x.y\tests\testdata\*.decTest
+#
+# Copy the additional tests:
+#
+#    cd mpdecimal-x.y\tests
+#    copy testdata_dist\* testdata
+#    cd ..
+#
 
-# Then, in the mpdecimal directory:
+
+# ----------------------------------------------------
+#  64-bit OS (fastest version, use whenever possible)
+# ----------------------------------------------------
+
+# Find the path to vcvarsamd64.bat (or vcvars64.bat) and execute it. Example:
+"C:\Program Files (x86)\Microsoft Visual Studio 9.0\VC\bin\amd64\vcvarsamd64.bat"
+
+# Copy Makefile:
+copy Makefile.vc Makefile
 
 
-# Use the exact same variables as for building! Examples:
+# EITHER build the static library
+# -------------------------------
+nmake clean
+nmake MACHINE=x64
+nmake MACHINE=x64 check
+
+
+# OR build the DLL
+# ----------------
+nmake clean
+nmake MACHINE=x64 DLL=1
 nmake MACHINE=x64 DLL=1 check
+
+# Visual Studio Professional, profile guided optimization:
+nmake clean
+nmake MACHINE=x64 DLL=1 profile
+nmake MACHINE=x64 DLL=1 check
+
+
+# OR build BOTH the static library and the DLL
+# --------------------------------------------
+nmake clean
+nmake MACHINE=x64
+nmake MACHINE=x64 check
+
+# Save the static library
+copy libmpdec-x.y.lib ..\
+
+nmake clean
+nmake MACHINE=x64 DLL=1
+nmake MACHINE=x64 DLL=1 check
+
+# Restore the static library
+move ..\libmpdec-x.y.lib .
+
+
+# ----------------------------------------------------
+#                      32-bit OS
+# ----------------------------------------------------
+
+# Find the path to vcvars32.bat and execute it. Example:
+"C:\Program Files\Microsoft Visual Studio 9.0\VC\bin\vcvars32.bat"
+
+# Copy Makefile:
+copy Makefile.vc Makefile
+
+
+# EITHER build the static library
+# -------------------------------
+nmake clean
+nmake MACHINE=ppro
 nmake MACHINE=ppro check
+
+
+# OR build the DLL
+# ----------------
+nmake clean
+nmake MACHINE=ppro DLL=1
+nmake MACHINE=ppro DLL=1 check
+
+# Visual Studio Professional, profile guided optimization:
+nmake clean
+nmake MACHINE=ppro DLL=1 profile
+nmake MACHINE=ppro DLL=1 check
+
+
+# OR build BOTH the static library and the DLL
+# --------------------------------------------
+nmake clean
+nmake MACHINE=ppro
+nmake MACHINE=ppro check
+
+# Save the static library
+copy libmpdec-x.y.lib ..\
+
+nmake clean
+nmake MACHINE=ppro DLL=1
+nmake MACHINE=ppro DLL=1 check
+
+# Restore the static library
+move ..\libmpdec-x.y.lib .
+
+
+# ---------------------
+#  Using the libraries
+# ---------------------
+
+# Static library: use the library directly
+cl.exe cmd\pow.c libmpdec-2.3.lib
+
+# DLL: specify the import library on the command line and define USE_DLL
+cl.exe /DUSE_DLL cmd\pow.c libmpdec-2.3.dll.lib
 
 
 # ---------------------------------

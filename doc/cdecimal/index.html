@@ -10,13 +10,13 @@
 <meta content="cdecimal documentation" name="description" />
 <meta content="mpdecimal, cdecimal, documentation" name="keywords" />
 
-    <title>cdecimal &mdash; mpdecimal v2.2 documentation</title>
-    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <title>cdecimal &mdash; mpdecimal v2.3 documentation</title>
+    <link rel="stylesheet" href="../_static/mpdecimal-doc.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '../',
-        VERSION:     '2.2',
+        VERSION:     '2.3',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  false
@@ -25,7 +25,7 @@
     <script type="text/javascript" src="../_static/jquery.js"></script>
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
-    <link rel="top" title="mpdecimal v2.2 documentation" href="../index.html" />
+    <link rel="top" title="mpdecimal v2.3 documentation" href="../index.html" />
     <link rel="prev" title="Advanced Memory Handling" href="../libmpdec/memory.html" /> 
   </head>
   <body>
@@ -36,7 +36,7 @@
           <a href="../libmpdec/memory.html" title="Advanced Memory Handling"
              accesskey="P">previous</a></li>
     <li><a href="http://www.bytereef.org/mpdecimal/index.html">project home</a>|&nbsp;</li>
-    <li><a href="../index.html">mpdecimal v2.2 documentation </a> &raquo;</li>
+    <li><a href="../index.html">mpdecimal v2.3 documentation </a> &raquo;</li>
  
       </ul>
     </div>
@@ -232,7 +232,7 @@ shows how the <tt class="xref py py-class docutils literal"><span class="pre">Si
 <h2>Context Limits</h2>
 <p>Module constants:</p>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="27%" />
 <col width="30%" />
@@ -259,10 +259,10 @@ shows how the <tt class="xref py py-class docutils literal"><span class="pre">Si
 </tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 <p>Valid ranges:</p>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="14%" />
 <col width="42%" />
@@ -289,7 +289,7 @@ shows how the <tt class="xref py py-class docutils literal"><span class="pre">Si
 </tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 </div>
 <div class="section" id="thread-local-default-context">
 <h2>Thread Local Default Context</h2>
@@ -330,14 +330,14 @@ relaxed. This can give rise to mistakes:</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">c</span><span class="o">.</span><span class="n">traps</span><span class="p">[</span><span class="n">FloatOperation</span><span class="p">]</span> <span class="o">=</span> <span class="bp">True</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">Decimal</span><span class="p">(</span><span class="mf">1.9</span><span class="p">)</span>
 <span class="gt">Traceback (most recent call last):</span>
-  File <span class="nb">&quot;&lt;stdin&gt;&quot;</span>, line <span class="m">1</span>, in <span class="n-Identifier">&lt;module&gt;</span>
-<span class="nc">cdecimal.FloatOperation</span>: <span class="n-Identifier">[&lt;class &#39;cdecimal.FloatOperation&#39;&gt;]</span>
+  File <span class="nb">&quot;&lt;stdin&gt;&quot;</span>, line <span class="m">1</span>, in <span class="n">&lt;module&gt;</span>
+<span class="gr">cdecimal.FloatOperation</span>: <span class="n">[&lt;class &#39;cdecimal.FloatOperation&#39;&gt;]</span>
 <span class="go">&gt;&gt;&gt;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">=</span> <span class="n">Decimal</span><span class="p">(</span><span class="s">&quot;1.9&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">x</span> <span class="o">&gt;</span> <span class="mf">1.9</span>
 <span class="gt">Traceback (most recent call last):</span>
-  File <span class="nb">&quot;&lt;stdin&gt;&quot;</span>, line <span class="m">1</span>, in <span class="n-Identifier">&lt;module&gt;</span>
-<span class="nc">cdecimal.FloatOperation</span>: <span class="n-Identifier">[&lt;class &#39;cdecimal.FloatOperation&#39;&gt;]</span>
+  File <span class="nb">&quot;&lt;stdin&gt;&quot;</span>, line <span class="m">1</span>, in <span class="n">&lt;module&gt;</span>
+<span class="gr">cdecimal.FloatOperation</span>: <span class="n">[&lt;class &#39;cdecimal.FloatOperation&#39;&gt;]</span>
 <span class="go">&gt;&gt;&gt;</span>
 </pre></div>
 </div>
@@ -345,7 +345,7 @@ relaxed. This can give rise to mistakes:</p>
 off by default. This is the standard behavior for mixed operations
 across several Python versions:</p>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="23%" />
 <col width="18%" />
@@ -401,10 +401,10 @@ across several Python versions:</p>
 </tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 <p>The same table with the FloatOperation signal enabled:</p>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="23%" />
 <col width="20%" />
@@ -484,7 +484,7 @@ across several Python versions:</p>
 <tr><td class="label"><a class="fn-backref" href="#id5">[5]</a></td><td>raises FloatOperation</td></tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 </div>
 <div class="section" id="ieeecontext-function">
 <h2>IEEEContext Function</h2>
@@ -575,13 +575,13 @@ than <tt class="xref py py-const docutils literal"><span class="pre">IEEE_CONTEX
           <a href="../libmpdec/memory.html" title="Advanced Memory Handling"
              >previous</a></li>
     <li><a href="http://www.bytereef.org/mpdecimal/index.html">project home</a>|&nbsp;</li>
-    <li><a href="../index.html">mpdecimal v2.2 documentation </a> &raquo;</li>
+    <li><a href="../index.html">mpdecimal v2.3 documentation </a> &raquo;</li>
  
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 2010, Stefan Krah.
-      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.5.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.7.
     </div>
   </body>
 </html>

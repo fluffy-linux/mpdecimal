@@ -14,9 +14,9 @@ if ! [ -f testdata/add.decTest ]; then
         exit 1
     fi
     printf "\nGetting official tests ... \n\n"
-    $WGET http://speleotrove.com/decimal/dectest.zip &&
+    $WGET -nv http://speleotrove.com/decimal/dectest.zip &&
     cd testdata &&
-    unzip ../dectest.zip &&
+    unzip -qq ../dectest.zip &&
     cd ../
 fi
 

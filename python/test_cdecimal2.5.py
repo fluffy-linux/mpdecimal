@@ -1449,7 +1449,7 @@ class DecimalUsabilityTest(unittest.TestCase):
 
         # XXX empty tuple, like in the NaN case
         d = Decimal("Infinity")
-        self.assertEqual(d.as_tuple(), (0, (), 'F') )
+        self.assertEqual(d.as_tuple(), (0, (0,), 'F') )
 
         #leading zeros in coefficient should be stripped
         d = Decimal( (0, (0, 0, 4, 0, 5, 3, 4), -2) )
@@ -1669,7 +1669,7 @@ class DecimalPythonAPItests(unittest.TestCase):
                 Decimal("1.23456789").quantize, Decimal('1e-100000'), c
             )
             self.assertRaises(
-                ValueError,
+                TypeError,
                 Decimal("1.23456789").quantize, Decimal('1e-100000'), 10
             )
             self.assertRaises(

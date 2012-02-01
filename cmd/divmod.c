@@ -42,6 +42,10 @@ main(int argc, char **argv)
 	char status_str[MPD_MAX_FLAG_STRING];
 	clock_t start_clock, end_clock;
 
+	if (argc != 3) {
+		fprintf(stderr, "divmod: usage: ./divmod x y\n");
+		exit(1);
+	}
 
 	mpd_init(&ctx, 38);
 	ctx.traps = 0;

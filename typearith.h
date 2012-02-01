@@ -536,19 +536,19 @@ _mpd_divmod_pow10(mpd_uint_t *q, mpd_uint_t *r, mpd_uint_t v, mpd_uint_t exp)
   if (exp <= 4) {
     switch (exp) {
     case 0: *q = v; *r = 0; break;
-    case 1: *q = v / 10ULL; *r = v - *q * 10ULL; break;
-    case 2: *q = v / 100ULL; *r = v - *q * 100ULL; break;
-    case 3: *q = v / 1000ULL; *r = v - *q * 1000ULL; break;
-    case 4: *q = v / 10000ULL; *r = v - *q * 10000ULL; break;
+    case 1: *q = v / 10UL; *r = v - *q * 10UL; break;
+    case 2: *q = v / 100UL; *r = v - *q * 100UL; break;
+    case 3: *q = v / 1000UL; *r = v - *q * 1000UL; break;
+    case 4: *q = v / 10000UL; *r = v - *q * 10000UL; break;
     }
   }
   else {
     switch (exp) {
-    case 5: *q = v / 100000ULL; *r = v - *q * 100000ULL; break;
-    case 6: *q = v / 1000000ULL; *r = v - *q * 1000000ULL; break;
-    case 7: *q = v / 10000000ULL; *r = v - *q * 10000000ULL; break;
-    case 8: *q = v / 100000000ULL; *r = v - *q * 100000000ULL; break;
-    case 9: *q = v / 1000000000ULL; *r = v - *q * 1000000000ULL; break; /* GCOV_NOT_REACHED */
+    case 5: *q = v / 100000UL; *r = v - *q * 100000UL; break;
+    case 6: *q = v / 1000000UL; *r = v - *q * 1000000UL; break;
+    case 7: *q = v / 10000000UL; *r = v - *q * 10000000UL; break;
+    case 8: *q = v / 100000000UL; *r = v - *q * 100000000UL; break;
+    case 9: *q = v / 1000000000UL; *r = v - *q * 1000000000UL; break; /* GCOV_NOT_REACHED */
     }
   }
 }

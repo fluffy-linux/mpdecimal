@@ -26,8 +26,8 @@
  */
 
 
-#include <stdio.h>
 #include "mpdecimal.h"
+#include <stdio.h>
 
 
 #ifdef PPRO

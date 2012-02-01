@@ -34,7 +34,9 @@
 #
 
 
-from formathelper import *
+import random
+from formathelper import rand_format, rand_fillchar, integers, printit
+from randdec import un_incr_digits
 print("rounding: half_even")
 
 
@@ -46,10 +48,10 @@ for x in range(1000):
             intpart = random.choice(integers)
             fracpart = random.choice(integers)
         s = ''.join((sign, intpart, '.', fracpart))
-        fmt = rand_format(rand_unicode())
+        fmt = rand_format(rand_fillchar())
         testno += 1
         printit(testno, s, fmt, 'utf-8')
     for s in un_incr_digits(15, 384, 30):
-        fmt = rand_format(rand_unicode())
+        fmt = rand_format(rand_fillchar())
         testno += 1
         printit(testno, s, fmt, 'utf-8')

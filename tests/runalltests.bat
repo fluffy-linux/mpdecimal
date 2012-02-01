@@ -23,6 +23,13 @@ cov.exe
 test_transpose.exe
 fntcov.exe
 
+if not exist deccheck.exe goto NEXT
+echo.
+echo Running decNumber tests ...
+echo.
+deccheck.exe
+:NEXT
+
 echo.
 echo Running long tests ...
 echo.

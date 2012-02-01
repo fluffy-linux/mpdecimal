@@ -6,7 +6,7 @@
 
 import random
 
-TEST_SIZE = 16
+TEST_SIZE = 2
 
 
 def test_short_halfway_cases():
@@ -249,15 +249,3 @@ def tern_randfloat():
         l2 = random.choice(TESTCASES)
         l3 = random.choice(TESTCASES)
         yield random.choice(l1), random.choice(l2), random.choice(l3)
-
-
-if __name__ == '__main__':
-
-    for s in un_randfloat():
-        print(s)
-
-    for s in bin_randfloat():
-        print(s)
-
-    for s in tern_randfloat():
-        print(s)

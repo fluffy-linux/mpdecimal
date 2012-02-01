@@ -9,13 +9,13 @@
     <meta content="index,follow" name="robots" />
 <meta content="libmpdec documentation" name="description" />
 
-    <title>Context &mdash; mpdecimal v2.2 documentation</title>
-    <link rel="stylesheet" href="../_static/default.css" type="text/css" />
+    <title>Context &mdash; mpdecimal v2.3 documentation</title>
+    <link rel="stylesheet" href="../_static/mpdecimal-doc.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    '../',
-        VERSION:     '2.2',
+        VERSION:     '2.3',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  false
@@ -24,7 +24,7 @@
     <script type="text/javascript" src="../_static/jquery.js"></script>
     <script type="text/javascript" src="../_static/underscore.js"></script>
     <script type="text/javascript" src="../_static/doctools.js"></script>
-    <link rel="top" title="mpdecimal v2.2 documentation" href="../index.html" />
+    <link rel="top" title="mpdecimal v2.3 documentation" href="../index.html" />
     <link rel="up" title="libmpdec" href="index.html" />
     <link rel="next" title="Decimals" href="decimals.html" />
     <link rel="prev" title="Function Index" href="functions.html" /> 
@@ -40,7 +40,7 @@
           <a href="functions.html" title="Function Index"
              accesskey="P">previous</a> |</li>
     <li><a href="http://www.bytereef.org/mpdecimal/index.html">project home</a>|&nbsp;</li>
-    <li><a href="../index.html">mpdecimal v2.2 documentation </a> &raquo;</li>
+    <li><a href="../index.html">mpdecimal v2.3 documentation </a> &raquo;</li>
 
           <li><a href="index.html" accesskey="U">libmpdec</a> &raquo;</li> 
       </ul>
@@ -123,7 +123,7 @@ parameter to quiet functions.</p>
 <div class="section" id="constants">
 <h2>Constants</h2>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="31%" />
 <col width="28%" />
@@ -150,12 +150,12 @@ parameter to quiet functions.</p>
 </tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 </div>
 <div class="section" id="precision-and-exponents">
 <h2>Precision and Exponents</h2>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="24%" />
 <col width="76%" />
@@ -172,21 +172,21 @@ parameter to quiet functions.</p>
 </tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 <p>Apart from the limits, the following rules must be observed when setting the context manually:</p>
 <blockquote>
-<ul class="simple">
+<div><ul class="simple">
 <li><em>prec</em> &lt;= <em>emax</em></li>
 <li><em>emin</em> = 1 - <em>emax</em> or <em>emin</em> = <em>-emax</em></li>
 </ul>
-</blockquote>
+</div></blockquote>
 <p>The specification requires 5 x <em>prec</em> &lt;= <em>emax</em> and recommends 10 x <em>prec</em> &lt;= <em>emax</em>.</p>
 </div>
 <div class="section" id="rounding">
 <h2>Rounding</h2>
 <p>The <em>round</em> field can take one of these values:</p>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="42%" />
 <col width="58%" />
@@ -221,7 +221,7 @@ parameter to quiet functions.</p>
 </tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 </div>
 <div class="section" id="signals-and-conditions">
 <h2>Signals and Conditions</h2>
@@ -239,7 +239,7 @@ that occurred even when the status has already been &#8220;polluted&#8221; with 
 error conditions.</p>
 <p>Here are the possible <em>signals</em> and <em>conditions</em>:</p>
 <blockquote>
-<table border="1" class="docutils">
+<div><table border="1" class="docutils">
 <colgroup>
 <col width="52%" />
 <col width="48%" />
@@ -304,7 +304,7 @@ error conditions.</p>
 <tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>unused, might be renamed to a user-definable signal.</td></tr>
 </tbody>
 </table>
-</blockquote>
+</div></blockquote>
 </div>
 <div class="section" id="exponent-clamping">
 <h2>Exponent Clamping</h2>
@@ -560,14 +560,14 @@ raises <tt class="xref c c-macro docutils literal"><span class="pre">SIGFPE</spa
           <a href="functions.html" title="Function Index"
              >previous</a> |</li>
     <li><a href="http://www.bytereef.org/mpdecimal/index.html">project home</a>|&nbsp;</li>
-    <li><a href="../index.html">mpdecimal v2.2 documentation </a> &raquo;</li>
+    <li><a href="../index.html">mpdecimal v2.3 documentation </a> &raquo;</li>
 
           <li><a href="index.html" >libmpdec</a> &raquo;</li> 
       </ul>
     </div>
     <div class="footer">
         &copy; Copyright 2010, Stefan Krah.
-      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.5.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.0.7.
     </div>
   </body>
 </html>

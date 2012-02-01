@@ -196,6 +196,7 @@ mpd_set_i32(mpd_t *result, int32_t a, mpd_context_t *ctx)
 	mpd_addstatus_raise(ctx, status);
 }
 
+#ifndef LEGACY_COMPILER
 void
 mpd_set_i64(mpd_t *result, int64_t a, mpd_context_t *ctx)
 {
@@ -203,6 +204,7 @@ mpd_set_i64(mpd_t *result, int64_t a, mpd_context_t *ctx)
 	mpd_qset_i64(result, a, ctx, &status);
 	mpd_addstatus_raise(ctx, status);
 }
+#endif
 
 /* set mpd from unsigned integer */
 void
@@ -221,6 +223,7 @@ mpd_set_u32(mpd_t *result, uint32_t a, mpd_context_t *ctx)
 	mpd_addstatus_raise(ctx, status);
 }
 
+#ifndef LEGACY_COMPILER
 void
 mpd_set_u64(mpd_t *result, uint64_t a, mpd_context_t *ctx)
 {
@@ -228,6 +231,7 @@ mpd_set_u64(mpd_t *result, uint64_t a, mpd_context_t *ctx)
 	mpd_qset_u64(result, a, ctx, &status);
 	mpd_addstatus_raise(ctx, status);
 }
+#endif
 
 /* convert mpd to signed integer */
 mpd_ssize_t

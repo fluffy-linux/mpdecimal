@@ -5,9 +5,9 @@
 
 
 INSTALLDIR = .
-LIBSTATIC = libmpdec-2.2.lib
-LIBIMPORT = libmpdec-2.2.dll.lib
-LIBSHARED = libmpdec-2.2.dll
+LIBSTATIC = libmpdec-2.3.lib
+LIBIMPORT = libmpdec-2.3.dll.lib
+LIBSHARED = libmpdec-2.3.dll
 
 
 OBJS = basearith.obj context.obj constants.obj convolute.obj crt.obj \
@@ -39,7 +39,7 @@ GMPLIB = "C:\Program Files\gmp\gmp.lib"
 GMPINC = "C:\Program Files\gmp"
 !endif
 !if "$(MACHINE)" == "full_coverage"
-CONFIG = /DCONFIG_32 /DANSI
+CONFIG = /DTEST_COVERAGE /DCONFIG_32 /DANSI
 GMPLIB = "C:\Program Files\gmp\gmp.lib"
 GMPINC = "C:\Program Files\gmp"
 !endif
@@ -176,7 +176,7 @@ Makefile vcdiv64.asm
 
 check:\
 $(BUILDLIB)
-	-@copy /y $(BUILDLIB) tests
+	-@if exist $(LIBSHARED) copy /y $(LIBSHARED) tests
 	-@cd tests
 	-@copy /y Makefile.vc Makefile
 	-@nmake UFLAGS="$(UFLAGS)" CFLAGS="$(CFLAGS)" USELIB="$(USELIB)"
@@ -184,17 +184,24 @@ $(BUILDLIB)
 
 extended:\
 Makefile $(BUILDLIB)
-	-@copy /y $(BUILDLIB) tests
+	-@if exist $(LIBSHARED) copy /y $(LIBSHARED) tests
 	-@cd tests
 	-@copy /y Makefile.vc Makefile
 	-@nmake UFLAGS="$(UFLAGS)" CFLAGS="$(CFLAGS)" USELIB="$(USELIB)" extended
 
 extended_gmp:\
 Makefile $(BUILDLIB)
-	-@copy /y $(BUILDLIB) tests
+	-@if exist $(LIBSHARED) copy /y $(LIBSHARED) tests
 	-@cd tests
 	-@copy /y Makefile.vc Makefile
 	-@nmake UFLAGS="$(UFLAGS)" CFLAGS="$(CFLAGS)" USELIB="$(USELIB)" GMPINC=$(GMPINC) GMPLIB=$(GMPLIB) extended_gmp
+
+extended_deccheck:\
+Makefile $(BUILDLIB)
+	-@if exist $(LIBSHARED) copy /y $(LIBSHARED) tests
+	-@cd tests
+	-@copy /y Makefile.vc Makefile
+	-@nmake UFLAGS="$(UFLAGS)" CFLAGS="$(CFLAGS)" USELIB="$(USELIB)" GMPINC=$(GMPINC) GMPLIB=$(GMPLIB) extended_deccheck
 
 
 FORCE:
@@ -230,8 +237,16 @@ clean: FORCE
 	-@if exist *.manifest del *.manifest
 	-@if exist *.exe del *.exe
 	-@if exist mpdecimal.h del mpdecimal.h
+	-@if exist build rd /q /s build
 	-@if exist python\cdecimal.pyd del python\cdecimal.pyd
+	-@if exist python\cdecimal_d.pyd del python\cdecimal_d.pyd
 	-@if exist python\*.pyc del python\*.pyc
 	-@cd tests && copy /y Makefile.vc Makefile && nmake clean
 
+distclean: FORCE
+	nmake clean
+	-@if exist Makefile del Makefile
+	-@if exist python\decimaltestdata rd /q /s python\decimaltestdata
+	-@if exist python\__pycache__ rd /q /s python\__pycache__
+	-@cd tests && nmake distclean
 
