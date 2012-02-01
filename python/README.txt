@@ -28,10 +28,12 @@ purpose is to check cdecimal.so against decimal.py. It supports (almost)
 all methods of decimal.py.
 
 
-ctx-deccheck2.py, ctx-deccheck3.py:
-===================================
+ctx-deccheck2.py:
+=================
 
-Same as above, but always uses the context methods.
+Same as above, but always uses the context methods. deccheck3.py now
+test both Decimal and Context methods, so the separate ctx-deccheck3.py
+has been removed.
 
 
 Verification:
@@ -70,30 +72,32 @@ deccheck.py takes the arguments --short (default), --medium, --long or
 
 
 runall.sh, runall-amd64.bat, runall-i386.bat:
-==============================================
+=============================================
 
 Run tests for all installed Python versions. Edit the script if not
-all versions from 2.5 through 3.2 are installed.
+all versions from 2.5 through 3.3 are installed.
 
 
 Valgrind + refleak tests:
-==========================
+=========================
 
-Create the following directory structure [1]:
+Create the following directory structure. The branch repositories can be
+created by using get_all_branches.sh:
 
-svndir/py3k
-svndir/release25-maint
-svndir/release26-maint
-svndir/release27-maint
-svndir/release31-maint
-svndir/mpdecimal/python
+hgdir/2.5
+hgdir/2.6
+hgdir/2.7
+hgdir/3.1
+hgdir/3.2
+hgdir/py3k
+hgdir/mpdecimal/python
 
 
-Change into svndir/mpdecimal/python and run:
+Change into hgdir/mpdecimal/python and run:
 
 ./runall-memorydebugger.sh
 
 
-[1] See http://www.python.org/dev/faq/ for svn checkout instructions.
+[1] See http://docs.python.org/devguide/ for mercurial checkout instructions.
 
 

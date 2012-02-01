@@ -1,8 +1,8 @@
+#include "mpdecimal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <signal.h>
-#include "mpdecimal.h"
 #include "mptypes.h"
 #include "malloc_fail.h"
 
@@ -35,12 +35,20 @@ test_traphandler(mpd_context_t *ctx UNUSED)
 	;
 }
 
+#ifndef LEGACY_COMPILER
 uint64_t
 randbits(void)
 {
 	return (uint64_t)rand()<<48 | (uint64_t)rand()<<32 |
 	       (uint64_t)rand()<<16 | (uint64_t)rand();
 }
+#else
+uint32_t
+randbits(void)
+{
+	return (uint32_t)rand()<<16 | (uint32_t)rand();
+}
+#endif
 
 
 /*****************************************************************************/
@@ -73,10 +81,12 @@ getset_##TYPE(                                             \
 
 TEST_GETSET_INTTYPE(mpd_ssize_t, PRI_mpd_ssize_t)
 TEST_GETSET_INTTYPE(int32_t, PRIi32)
-TEST_GETSET_INTTYPE(int64_t, PRIi64)
-TEST_GETSET_INTTYPE(mpd_uint_t, PRI_mpd_size_t)
+TEST_GETSET_INTTYPE(mpd_uint_t, PRI_mpd_uint_t)
 TEST_GETSET_INTTYPE(uint32_t, PRIu32)
+#ifndef LEGACY_COMPILER
+TEST_GETSET_INTTYPE(int64_t, PRIi64)
 TEST_GETSET_INTTYPE(uint64_t, PRIu64)
+#endif
 
 static void
 test_int_conversions(void)
@@ -129,6 +139,7 @@ test_int_conversions(void)
 		               mpd_get_i32, mpd_sset_i32);
 	}
 
+#ifndef LEGACY_COMPILER
 	/* int64_t */
 	getset_int64_t(a, INT64_MIN, &ctx, mpd_get_i64, mpd_set_i64);
 	getset_int64_t(a, INT64_MAX, &ctx, mpd_get_i64, mpd_set_i64);
@@ -136,6 +147,7 @@ test_int_conversions(void)
 		getset_int64_t(a, (int64_t)randbits(), &ctx,
 		               mpd_get_i64, mpd_set_i64);
 	}
+#endif
 
 #ifdef CONFIG_64
 	getset_int64_t(&b, INT64_MIN, &ctx, mpd_get_i64, mpd_sset_i64);
@@ -176,6 +188,7 @@ test_int_conversions(void)
 		                mpd_get_u32, mpd_sset_u32);
 	}
 
+#ifndef LEGACY_COMPILER
 	/* uint64_t */
 	getset_uint64_t(a, 0, &ctx, mpd_get_u64, mpd_set_u64);
 	getset_uint64_t(a, UINT64_MAX, &ctx, mpd_get_u64, mpd_set_u64);
@@ -183,6 +196,7 @@ test_int_conversions(void)
 		getset_uint64_t(a, (uint64_t)randbits(), &ctx,
 		                mpd_get_u64, mpd_set_u64);
 	}
+#endif
 
 #ifdef CONFIG_64
 	getset_uint64_t(&b, 0, &ctx, mpd_get_u64, mpd_sset_u64);
@@ -214,7 +228,7 @@ test_int_conversions(void)
 
 	/* too large */
 	status = 0;
-	mpd_set_uint(a, ((uint64_t)MPD_SSIZE_MAX)+1, &ctx);
+	mpd_set_uint(a, ((mpd_uint_t)MPD_SSIZE_MAX)+1, &ctx);
 	ASSERT(mpd_qget_ssize(a, &status) == MPD_SSIZE_MAX)
 	ASSERT(status&MPD_Invalid_operation)
 
@@ -233,6 +247,7 @@ arith_##TYPE(                                                                 \
     void (* func)(mpd_t *, const mpd_t *, TYPE, mpd_context_t *ctx),          \
     void (* ctrl)(mpd_t *, const mpd_t *, const mpd_t *, mpd_context_t *ctx)) \
 {                                                                             \
+        mpd_context_t maxctx;                                                 \
         char buf[BUFSIZE];                                                    \
         char *s1, *s2;                                                        \
                                                                               \
@@ -240,7 +255,8 @@ arith_##TYPE(                                                                 \
         s1 = mpd_to_sci(tmp, 0);                                              \
                                                                               \
         snprintf(buf, BUFSIZE, "%" FMTSPEC, x);                               \
-        mpd_set_string(tmp, buf, ctx);                                        \
+        mpd_maxcontext(&maxctx);                                              \
+        mpd_set_string(tmp, buf, &maxctx);                                    \
         ctrl(tmp, a, tmp, ctx);                                               \
         s2 = mpd_to_sci(tmp, 0);                                              \
                                                                               \
@@ -251,7 +267,7 @@ arith_##TYPE(                                                                 \
 
 TEST_ARITH_INTTYPE(mpd_ssize_t, PRI_mpd_ssize_t)
 TEST_ARITH_INTTYPE(int32_t, PRIi32)
-TEST_ARITH_INTTYPE(mpd_uint_t, PRI_mpd_size_t)
+TEST_ARITH_INTTYPE(mpd_uint_t, PRI_mpd_uint_t)
 TEST_ARITH_INTTYPE(uint32_t, PRIu32)
 #ifdef CONFIG_64
 TEST_ARITH_INTTYPE(int64_t, PRIi64)
@@ -284,87 +300,85 @@ static void (*control_funcs[])(mpd_t*, const mpd_t*, const mpd_t*, mpd_context_t
 
 /* mixed mpd_t and integer operations */
 static void
-test_mixed_arith(void)
+test_mixed_arith(mpd_context_t *ctx)
 {
-	mpd_context_t ctx;
 	mpd_t *tmp, *a;
 	int i, k;
 
-	mpd_testcontext(&ctx);
-	tmp = mpd_new(&ctx);
-	a = mpd_new(&ctx);
+	tmp = mpd_new(ctx);
+	a = mpd_new(ctx);
 
-	ctx.traps &= ~MPD_Division_by_zero;
+	ctx->traps &= ~MPD_Division_by_zero;
 
 	for (i = 0; ssize_funcs[i] != NULL; i++) {
-		mpd_set_string(a, "123456e2", &ctx);
-		arith_mpd_ssize_t(tmp, a, MPD_SSIZE_MIN, &ctx,
+		mpd_set_string(a, "123456e2", ctx);
+		arith_mpd_ssize_t(tmp, a, MPD_SSIZE_MIN, ctx,
 		                  ssize_funcs[i], control_funcs[i]);
-		arith_mpd_ssize_t(tmp, a, MPD_SSIZE_MAX, &ctx,
+		arith_mpd_ssize_t(tmp, a, MPD_SSIZE_MAX, ctx,
 		                  ssize_funcs[i], control_funcs[i]);
-		for (k = 0; k < 100000; k++) {
-			arith_mpd_ssize_t(tmp, a, (mpd_ssize_t)randbits(), &ctx,
+		for (k = 0; k < 1000; k++) {
+			arith_mpd_ssize_t(tmp, a, (mpd_ssize_t)randbits(), ctx,
 		                          ssize_funcs[i], control_funcs[i]);
 		}
 	}
 
 	for (i = 0; i32_funcs[i] != NULL; i++) {
-		mpd_set_string(a, "-123456e2", &ctx);
-		arith_int32_t(tmp, a, INT32_MIN, &ctx,
+		mpd_set_string(a, "-123456e2", ctx);
+		arith_int32_t(tmp, a, INT32_MIN, ctx,
 		              i32_funcs[i], control_funcs[i]);
-		arith_int32_t(tmp, a, INT32_MAX, &ctx,
+		arith_int32_t(tmp, a, INT32_MAX, ctx,
 		              i32_funcs[i], control_funcs[i]);
-		for (k = 0; k < 100000; k++) {
-			arith_int32_t(tmp, a, (int32_t)randbits(), &ctx,
+		for (k = 0; k < 1000; k++) {
+			arith_int32_t(tmp, a, (int32_t)randbits(), ctx,
 		                      i32_funcs[i], control_funcs[i]);
 		}
 	}
 
 	for (i = 0; uint_funcs[i] != NULL; i++) {
-		mpd_set_string(a, "456789e2", &ctx);
-		arith_mpd_uint_t(tmp, a, 0, &ctx,
+		mpd_set_string(a, "456789e2", ctx);
+		arith_mpd_uint_t(tmp, a, 0, ctx,
 		                 uint_funcs[i], control_funcs[i]);
-		arith_mpd_uint_t(tmp, a, MPD_UINT_MAX, &ctx,
+		arith_mpd_uint_t(tmp, a, MPD_UINT_MAX, ctx,
 		                 uint_funcs[i], control_funcs[i]);
-		for (k = 0; k < 100000; k++) {
-			arith_mpd_uint_t(tmp, a, (mpd_uint_t)randbits(), &ctx,
+		for (k = 0; k < 1000; k++) {
+			arith_mpd_uint_t(tmp, a, (mpd_uint_t)randbits(), ctx,
 		                         uint_funcs[i], control_funcs[i]);
 		}
 	}
 
 	for (i = 0; u32_funcs[i] != NULL; i++) {
-		mpd_set_string(a, "987654e2", &ctx);
-		arith_uint32_t(tmp, a, 0, &ctx,
+		mpd_set_string(a, "987654e2", ctx);
+		arith_uint32_t(tmp, a, 0, ctx,
 		               u32_funcs[i], control_funcs[i]);
-		arith_uint32_t(tmp, a, UINT32_MAX, &ctx,
+		arith_uint32_t(tmp, a, UINT32_MAX, ctx,
 		               u32_funcs[i], control_funcs[i]);
-		for (k = 0; k < 100000; k++) {
-			arith_uint32_t(tmp, a, (uint32_t)randbits(), &ctx,
+		for (k = 0; k < 1000; k++) {
+			arith_uint32_t(tmp, a, (uint32_t)randbits(), ctx,
 		                       u32_funcs[i], control_funcs[i]);
 		}
 	}
 
 #ifdef CONFIG_64
 	for (i = 0; i64_funcs[i] != NULL; i++) {
-		mpd_set_string(a, "-123456e2", &ctx);
-		arith_int64_t(tmp, a, INT64_MIN, &ctx,
+		mpd_set_string(a, "-123456e2", ctx);
+		arith_int64_t(tmp, a, INT64_MIN, ctx,
 		              i64_funcs[i], control_funcs[i]);
-		arith_int64_t(tmp, a, INT64_MAX, &ctx,
+		arith_int64_t(tmp, a, INT64_MAX, ctx,
 		              i64_funcs[i], control_funcs[i]);
-		for (k = 0; k < 100000; k++) {
-			arith_int64_t(tmp, a, (int64_t)randbits(), &ctx,
+		for (k = 0; k < 1000; k++) {
+			arith_int64_t(tmp, a, (int64_t)randbits(), ctx,
 		                      i64_funcs[i], control_funcs[i]);
 		}
 	}
 
 	for (i = 0; u64_funcs[i] != NULL; i++) {
-		mpd_set_string(a, "-123456e2", &ctx);
-		arith_uint64_t(tmp, a, 0, &ctx,
+		mpd_set_string(a, "-123456e2", ctx);
+		arith_uint64_t(tmp, a, 0, ctx,
 		               u64_funcs[i], control_funcs[i]);
-		arith_uint64_t(tmp, a, UINT64_MAX, &ctx,
+		arith_uint64_t(tmp, a, UINT64_MAX, ctx,
 		               u64_funcs[i], control_funcs[i]);
-		for (k = 0; k < 100000; k++) {
-			arith_uint64_t(tmp, a, (uint64_t)randbits(), &ctx,
+		for (k = 0; k < 1000; k++) {
+			arith_uint64_t(tmp, a, (uint64_t)randbits(), ctx,
 		                       u64_funcs[i], control_funcs[i]);
 		}
 	}
@@ -1187,6 +1201,127 @@ test_output(void)
 	mpd_del(&a);
 }
 
+typedef struct {
+	uint8_t sign;
+	mpd_uint_t value;
+} signed_uint_t;
+#ifdef CONFIG_64
+  #define MPD_MIN_ETINY_ MPD_MIN_ETINY
+  #define MPD_MAX_EMAX_ MPD_MAX_EMAX
+  #define MPD_MIN_EMIN_ MPD_MIN_EMIN
+#else
+  #define MPD_MIN_ETINY_ -1999999997
+  #define MPD_MAX_EMAX_ 999999999
+  #define MPD_MIN_EMIN_ -999999999
+#endif
+
+static void
+test_scaleb(void)
+{
+	mpd_context_t ctx;
+	mpd_uint_t adata[MPD_MINALLOC_MAX];
+	mpd_uint_t bdata[MPD_MINALLOC_MAX];
+	mpd_t a = {MPD_STATIC|MPD_STATIC_DATA, 0, 0, 0, MPD_MINALLOC_MAX, adata};
+	mpd_t b = {MPD_STATIC|MPD_STATIC_DATA, 0, 0, 0, MPD_MINALLOC_MAX, bdata};
+	signed_uint_t a_exp, b_exp;
+	int i;
+
+	mpd_maxcontext(&ctx);
+	ctx.traps = 0;
+
+#ifdef CONFIG_32
+	/* generally not safe */
+	ctx.prec = 999999999;
+	ctx.emax = 999999999;
+	ctx.emin = -999999999;
+
+	ctx.status = 0;
+	mpd_set_string(&a, "1e999999999", &ctx);
+	mpd_set_string(&b, "1147483648", &ctx);
+	mpd_scaleb(&a, &a, &b, &ctx);
+	ASSERT(ctx.status&MPD_Overflow)
+	ASSERT(mpd_ispositive(&a))
+	ASSERT(mpd_isinfinite(&a))
+
+	ctx.status = 0;
+	mpd_set_string(&a, "1e999999999", &ctx);
+	mpd_set_string(&b, "1147483649", &ctx);
+	mpd_scaleb(&a, &a, &b, &ctx);
+	ASSERT(ctx.status&MPD_Overflow)
+	ASSERT(mpd_ispositive(&a))
+	ASSERT(mpd_isinfinite(&a))
+
+	ctx.status = 0;
+	mpd_set_string(&a, "1e-1999999997", &ctx);
+	mpd_set_string(&b, "-147483651", &ctx);
+	mpd_scaleb(&a, &a, &b, &ctx);
+	ASSERT(ctx.status&(MPD_Underflow|MPD_Clamped))
+	ASSERT(mpd_ispositive(&a))
+	ASSERT(mpd_iszero(&a))
+
+	ctx.status = 0;
+	mpd_set_string(&a, "1e-1999999997", &ctx);
+	mpd_set_string(&b, "-147483652", &ctx);
+	mpd_scaleb(&a, &a, &b, &ctx);
+	ASSERT(ctx.status&(MPD_Underflow|MPD_Clamped))
+	ASSERT(mpd_ispositive(&a))
+	ASSERT(mpd_iszero(&a))
+#endif
+
+	for (i = 0; i < 10000; i++) {
+		ctx.status = 0;
+
+		b_exp.value = (mpd_uint_t)randbits();
+		b_exp.sign = random()%2;
+		mpd_sset_uint(&b, b_exp.value, &ctx);
+		mpd_set_sign(&b, b_exp.sign);
+
+		a_exp.sign = random()%2;
+		if (a_exp.sign) {
+			a_exp.value = random()%(MPD_MAX_EMAX_+1);
+		}
+		else {
+			a_exp.value = random()%(-MPD_MIN_ETINY_+1);
+		}
+		mpd_set_string(&a, "1", &ctx);
+		a.exp = a_exp.value;
+		a.exp *= (a_exp.sign?-1:1);
+
+		mpd_scaleb(&a, &a, &b, &ctx);
+		if (b_exp.value > 2 * (mpd_uint_t)(ctx.prec + ctx.emax)) {
+			ASSERT(ctx.status&MPD_Invalid_operation)
+			ASSERT(mpd_isnan(&a))
+		}
+		else {
+		#if !defined(LEGACY_COMPILER) || defined (__GNUC__) || defined(_MSC_VER)
+			int64_t x;
+			x = (int64_t)a_exp.value * (a_exp.sign?-1:1);
+			x += (int64_t)b_exp.value * (b_exp.sign?-1:1);
+			if (x < MPD_MIN_ETINY_) {
+				ASSERT(ctx.status&MPD_Underflow)
+				ASSERT(mpd_iszero(&a))
+			}
+			else if (MPD_MIN_ETINY_ <= x && x < MPD_MIN_EMIN_) {
+				ASSERT(ctx.status&MPD_Subnormal)
+				ASSERT(a.exp == x)
+			}
+			else if (MPD_MIN_EMIN_ <= x && x <= MPD_MAX_EMAX_) {
+				ASSERT(ctx.status == 0)
+				ASSERT(a.exp == x)
+			}
+			else {
+				ASSERT(ctx.status&MPD_Overflow)
+				ASSERT(mpd_isinfinite(&a))
+			}
+		#endif
+			ASSERT(!(ctx.status&MPD_Invalid_operation))
+		}
+	}
+
+	mpd_del(&a);
+	mpd_del(&b);
+}
+
 static sig_atomic_t sigfpe_raised = 0;
 void
 sigfpe_handler(int signum)
@@ -1282,7 +1417,7 @@ test_misc(void)
 	ASSERT(ctx.status == (MPD_Rounded|MPD_Overflow|MPD_Inexact))
 	mpd_free(s);
 
-#ifdef CONFIG_32
+#if defined(CONFIG_32) && !defined(LEGACY_COMPILER)
 	/* Allocation failure in mpd_set_u64 */
 	mpd_resize(&a, MPD_MINALLOC_MAX+1, &ctx);
 	mpd_minalloc(&a);
@@ -1312,6 +1447,8 @@ test_misc(void)
 int
 main(void)
 {
+	mpd_context_t ctx;
+
 	srand((unsigned int)time(NULL));
 	fprintf(stderr, "Running cov ... \n\n");
 
@@ -1324,9 +1461,21 @@ main(void)
 	test_attributes();
 
 	test_int_conversions();
-	test_mixed_arith();
+	mpd_testcontext(&ctx);
+	test_mixed_arith(&ctx);
+
+	ctx.traps = 0;
+	for (ctx.prec = 1; ctx.prec < 23; ctx.prec++) {
+		for (ctx.emax = 1; ctx.emax < 23; ctx.emax++) {
+			if (ctx.emax < ctx.prec) continue;
+			ctx.emin = -ctx.emax;
+			test_mixed_arith(&ctx);
+		}
+	}
+
 	test_shift();
 	test_baseconv();
+	test_scaleb();
 	test_misc();
 
 	/* memory.c */

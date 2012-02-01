@@ -26,11 +26,14 @@
 #
 
 
+from __future__ import with_statement
 import os, sys, locale, random
 import platform, subprocess
-from randdec import *
-from decimal import *
+from distutils.spawn import find_executable
 
+from decimal import Decimal
+
+py_major = sys.version_info[0]
 
 windows_lang_strings = [
   "chinese", "chinese-simplified", "chinese-traditional", "czech", "danish",
@@ -122,23 +125,28 @@ numbers = [
   "1e1", "-1e1"
 ]
 
-py_major = sys.version_info[0]
-
+# Get the list of available locales.
 if platform.system() == 'Windows':
     locale_list = windows_lang_strings
 else:
-    try:
+    locale_list = ['C']
+    if os.path.isfile("/var/lib/locales/supported.d/local"):
         # On Ubuntu, `locale -a` gives the wrong case for some locales,
         # so we get the correct names directly:
-        f = open("/var/lib/locales/supported.d/local")
-        locale_list = [loc.split()[0] for loc in f.readlines()]
-    except:
+        with open("/var/lib/locales/supported.d/local") as f:
+            locale_list = [loc.split()[0] for loc in f.readlines() \
+                           if not loc.startswith('#')]
+    elif find_executable('locale'):
         locale_list = subprocess.Popen(["locale", "-a"],
                           stdout=subprocess.PIPE).communicate()[0]
         if py_major == 3:
-            locale_list = locale_list.decode()
+            try:
+                locale_list = locale_list.decode()
+            except UnicodeDecodeError:
+                # Some distributions insist on using latin-1 characters
+                # in their locale names.
+                locale_list = locale_list.decode('latin-1')
         locale_list = locale_list.split('\n')
-
 
 if py_major < 3:
     # issue7327 (min_width and multibyte separators): wont_fix
@@ -176,18 +184,20 @@ if os.path.isfile("/etc/locale.alias"):
                 if x[0] in locale_list:
                     locale_list.remove(x[0])
 
+# FreeBSD
 if platform.system() == 'FreeBSD':
     # http://www.freebsd.org/cgi/query-pr.cgi?pr=142173
     # en_GB.US-ASCII has 163 as the currency symbol.
-    for loc in ['it_CH.ISO8859-1', 'it_CH.ISO8859-15', 'it_CH.UTF-8', 'it_IT.ISO8859-1',
-                'it_IT.ISO8859-15', 'it_IT.UTF-8', 'sl_SI.ISO8859-2', 'sl_SI.UTF-8',
+    for loc in ['it_CH.ISO8859-1', 'it_CH.ISO8859-15', 'it_CH.UTF-8',
+                'it_IT.ISO8859-1', 'it_IT.ISO8859-15', 'it_IT.UTF-8',
+                'sl_SI.ISO8859-2', 'sl_SI.UTF-8',
                 'en_GB.US-ASCII']:
         try:
             locale_list.remove(loc)
         except ValueError:
             pass
 
-
+# Print a testcase in the format of the IBM tests (for runtest.c):
 def get_preferred_encoding():
     loc = locale.setlocale(locale.LC_CTYPE)
     if loc in preferred_encoding:
@@ -229,3 +239,141 @@ else:
                                  % (testno, s, fmt, result))
         except Exception as err:
             sys.stderr.write("%s  %s  %s\n" % (err, s, fmt))
+
+
+# Check if an integer can be converted to a valid fill character.
+def check_fillchar(i):
+    try:
+        c = chr(i)
+        c.encode('utf-8').decode()
+        format(Decimal(0), c + '<19g')
+        if c in ("'", '"', '\\'):
+            return None
+        return c
+    except:
+        return None
+
+# Generate all unicode characters that are accepted as
+# fill characters by decimal.py.
+def all_fillchars():
+    for i in range(32, 0x110002):
+        c = check_fillchar(i)
+        if c: yield c
+
+# Return random fill character.
+def rand_fillchar():
+    while 1:
+        i = random.randrange(32, 0x110002)
+        c = check_fillchar(i)
+        if c: return c
+
+# Generate random format strings
+# [[fill]align][sign][#][0][width][.precision][type]
+def rand_format(fill):
+    active = sorted(random.sample(range(7), random.randrange(8)))
+    have_align = 0
+    s = ''
+    for elem in active:
+        if elem == 0: # fill+align
+            s += fill
+            s += random.choice('<>=^')
+            have_align = 1
+        elif elem == 1: # sign
+            s += random.choice('+- ')
+        elif elem == 2 and not have_align: # zeropad
+            s += '0'
+        elif elem == 3: # width
+            s += str(random.randrange(1, 100))
+        elif elem == 4: # thousands separator
+            s += ','
+        elif elem == 5: # prec
+            s += '.'
+            # decimal.py does not support prec=0
+            s += str(random.randrange(1, 100))
+        elif elem == 6:
+            if 4 in active: c = 'EeGgFf%'
+            else: c = 'EeGgFfn%'
+            s += random.choice(c)
+    return s
+
+# Partially brute force all possible format strings containing a thousands
+# separator. Fall back to random where the runtime would become excessive.
+# [[fill]align][sign][#][0][width][,][.precision][type]
+def all_format_sep():
+    for align in ('', '<', '>', '=', '^'):
+        for fill in ('', 'x'):
+            if align == '': fill = ''
+            for sign in ('', '+', '-', ' '):
+                for zeropad in ('', '0'):
+                    if align != '': zeropad = ''
+                    for width in ['']+[str(y) for y in range(1, 15)]+['101']:
+                        for prec in ['']+['.'+str(y) for y in range(15)]:
+                            # for type in ('', 'E', 'e', 'G', 'g', 'F', 'f', '%'):
+                            type = random.choice(('', 'E', 'e', 'G', 'g', 'F', 'f', '%'))
+                            yield ''.join((fill, align, sign, zeropad, width, ',', prec, type))
+
+# Partially brute force all possible format strings with an 'n' specifier.
+# [[fill]align][sign][#][0][width][,][.precision][type]
+def all_format_loc():
+    for align in ('', '<', '>', '=', '^'):
+        for fill in ('', 'x'):
+            if align == '': fill = ''
+            for sign in ('', '+', '-', ' '):
+                for zeropad in ('', '0'):
+                    if align != '': zeropad = ''
+                    for width in ['']+[str(y) for y in range(1, 20)]+['101']:
+                        for prec in ['']+['.'+str(y) for y in range(1, 20)]:
+                            yield ''.join((fill, align, sign, zeropad, width, prec, 'n'))
+
+# Generate random format strings with a unicode fill character
+# [[fill]align][sign][#][0][width][,][.precision][type]
+def randfill(fill):
+    active = sorted(random.sample(range(5), random.randrange(6)))
+    s = ''
+    s += str(fill)
+    s += random.choice('<>=^')
+    for elem in active:
+        if elem == 0: # sign
+            s += random.choice('+- ')
+        elif elem == 1: # width
+            s += str(random.randrange(1, 100))
+        elif elem == 2: # thousands separator
+            s += ','
+        elif elem == 3: # prec
+            s += '.'
+            # decimal.py does not support prec=0
+            s += str(random.randrange(1, 100))
+        elif elem == 4:
+            if 2 in active: c = 'EeGgFf%'
+            else: c = 'EeGgFfn%'
+            s += random.choice(c)
+    return s
+
+# Generate random format strings with random locale setting
+# [[fill]align][sign][#][0][width][,][.precision][type]
+def rand_locale():
+    try:
+        loc = random.choice(locale_list)
+        locale.setlocale(locale.LC_ALL, loc)
+    except locale.Error as err:
+        pass
+    active = sorted(random.sample(range(5), random.randrange(6)))
+    s = ''
+    have_align = 0
+    for elem in active:
+        if elem == 0: # fill+align
+            s += chr(random.randrange(32, 128))
+            s += random.choice('<>=^')
+            have_align = 1
+        elif elem == 1: # sign
+            s += random.choice('+- ')
+        elif elem == 2 and not have_align: # zeropad
+            s += '0'
+        elif elem == 3: # width
+            s += str(random.randrange(1, 100))
+        elif elem == 4: # prec
+            s += '.'
+            # decimal.py does not support prec=0
+            s += str(random.randrange(1, 100))
+    s += 'n'
+    return s

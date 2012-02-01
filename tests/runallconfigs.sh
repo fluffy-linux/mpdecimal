@@ -19,6 +19,21 @@ if [ X"$GMAKE" = X"" ]; then
     GMAKE=make
 fi
 
+DNTEST="true"
+case `uname -a` in
+    # suncc does not compile decNumber.
+    *SunOS*) DNTEST="false" ;;
+esac
+case $CC in
+    # CompCert does not compile decNumber.
+    *ccomp*) DNTEST="false" ;;
+esac
+
+
+./gettests.sh || exit 1
+if [ "$DNTEST" = "true" ]; then
+    ./getdn.sh || exit 1
+fi
 
 for config in $CONFIGS; do
     printf "\n# ========================================================================\n"
@@ -32,6 +47,9 @@ for config in $CONFIGS; do
     fi
     $GMAKE extended
     cd tests
+    if [ "$DNTEST" = "true" ]; then
+        $GMAKE deccheck
+    fi
     printf "\n"
     if [ X"$config" = X"ppro" ]; then
         # Valgrind has no support for 80 bit long double arithmetic.

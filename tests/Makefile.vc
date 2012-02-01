@@ -4,16 +4,17 @@ CC = cl.exe
 LD = $(CC)
 
 SRCDIR = ..
-INC = -I$(SRCDIR)
 
 OBJS =
 !if "$(MACHINE)" == "x64"
 OBJS = $(SRCDIR)\vcdiv64.obj
 !endif
 
+
 default: runtest cov fntcov test_transpose
 extended: default karatsuba_fnt karatsuba_fnt2 ppro_mulmod
 extended_gmp: extended mpd_mpz_add mpd_mpz_divmod mpd_mpz_mul mpd_mpz_sub
+extended_deccheck: extended_gmp deccheck
 
 
 # dectest
@@ -70,6 +71,14 @@ mpd_mpz_sub:\
 Makefile mpd_mpz_sub.c $(SRCDIR)\mpdecimal.h $(SRCDIR)\mptypes.h $(SRCDIR)\$(USELIB)
 	$(CC) -I$(SRCDIR) -I"$(GMPINC)" $(UFLAGS) $(CFLAGS) mpd_mpz_sub.c $(SRCDIR)\$(USELIB) "$(GMPLIB)"
 
+# tests against decNumber
+deccheck:\
+Makefile deccheck.c $(SRCDIR)\io.h  $(SRCDIR)\mpdecimal.h $(SRCDIR)\memory.h \
+                    $(SRCDIR)\mptest.h $(SRCDIR)\mptypes.h $(SRCDIR)\$(USELIB)
+	copy ..\vcstdint.h ..\stdint.h
+	$(CC) -I$(SRCDIR) /IdecNumber /wd4244 $(UFLAGS) $(CFLAGS) deccheck.c \
+	decNumber\decNumber.c decNumber\decContext.c $(SRCDIR)\$(USELIB)
+
 
 FORCE:
 
@@ -84,6 +93,14 @@ clean: FORCE
 	-@if exist *.pgd del *.pgd
 	-@if exist *.manifest del *.manifest
 	-@if exist *.exe del *.exe
+
+distclean: FORCE
+	nmake clean
+	-@if exist testdata rd /q /s testdata
+	-@if exist decNumber rd /q /s decNumber
+	-@if exist *.zip del /q *.zip
+	-@if exist ..\stdint.h del ..\stdint.h
+	-@if exist Makefile del Makefile
 
 
 

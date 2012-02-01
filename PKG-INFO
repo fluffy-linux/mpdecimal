@@ -1,12 +1,12 @@
 Metadata-Version: 1.0
 Name: cdecimal
-Version: 2.2
+Version: 2.3
 Summary: Fast arbitrary precision correctly-rounded decimal floating point arithmetic.
 Home-page: http://www.bytereef.org/mpdecimal/index.html
 Author: Stefan Krah
 Author-email: skrah@bytereef.org
 License: BSD License
-Download-URL: http://www.bytereef.org/software/cdecimal-2.2.tar.gz
+Download-URL: http://www.bytereef.org/software/mpdecimal/releases/cdecimal-2.3.tar.gz
 Description: 
         Overview
         --------

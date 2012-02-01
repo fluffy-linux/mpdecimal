@@ -3,6 +3,52 @@
 Changelog
 =========
 
+Version 2.3
+-----------
+
+libmpdec
+~~~~~~~~
+
+    **features**
+
+    1) New test suite with comprehensive tests against decNumber.
+
+    2) Full support for compilers without uint64_t (tested with CompCert).
+
+    **bug fixes**
+
+    1) If ROUND_FLOOR is set and the operand is zero, the functions
+       mpd_plus() and mpd_minus() have special cases for the sign of
+       the result.
+
+
+cdecimal
+~~~~~~~~
+
+    **features**
+
+    1) 100% code coverage, including all failures of Python API functions.
+
+    2) Speed up int/Decimal conversion for integers that fit into a
+       single word of a PyLongObject (performance gain is around 15%).
+
+    3) Add real(), imag(), conjugate(), __complex__().
+
+    4) Add Fraction and complex comparisons (enabled for Python-3.2).
+       For compatibility reasons this feature is disabled for Python-2.x
+       and Python-3.1; it can be enabled by removing some #ifdefs in the
+       source.
+
+    5) The Decimal constructor now accepts lists as well as tuples.
+
+    6) Add support for DecimalTuple output.
+
+    **bug fixes**
+
+    1) A couple of refleaks that could be triggered by unlikely failures
+       of Python API functions have been fixed.
+
+
 Version 2.2
 -----------
 

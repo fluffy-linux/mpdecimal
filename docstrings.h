@@ -113,6 +113,10 @@ ignoring the sign of each operand.  x.compare_total_mag(y) is\n\
 equivalent to x.copy_abs().compare_total(y.copy_abs()).\n\
 \n");
 
+PyDoc_STRVAR(doc_conjugate,"\n\
+conjugate() - Return self.\n\
+\n");
+
 PyDoc_STRVAR(doc_copy_abs,"\n\
 copy_abs() - Return the absolute value of the argument. This operation\n\
 is unaffected by the context and is quiet: no flags are changed and no\n\
@@ -346,7 +350,7 @@ result is subnormal and inexact.\n\
 If the exponent of the second operand is larger than that of the first, then\n\
 rounding may be necessary. In this case, the rounding mode is determined by the\n\
 rounding argument if given, else by the given context argument; if neither\n\
-argument is given, the rounding mode of the current thread’s context is used.\n\
+argument is given, the rounding mode of the current thread's context is used.\n\
 \n");
 
 PyDoc_STRVAR(doc_radix,"\n\

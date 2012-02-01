@@ -34,7 +34,9 @@
 #
 
 
-from formathelper import *
+import sys, locale, random
+from formathelper import locale_list, rand_format, integers, printit
+from randdec import un_incr_digits
 print("rounding: half_even")
 
 

@@ -1,9 +1,9 @@
-#include <stdlib.h>
 #include "mpdecimal.h"
+#include <stdlib.h>
 #include "malloc_fail.h"
 
 
-/* Test allocation failures */
+/* Test allocation failures */
 int alloc_count;
 int alloc_fail;
 int alloc_idx;

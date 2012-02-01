@@ -1,7 +1,7 @@
 dnl Some parts taken from Python's configure.in.
 
 AC_PREREQ([2.67])
-AC_INIT(mpdecimal, 2.2, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
+AC_INIT(mpdecimal, 2.3, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_FILES([Makefile tests/Makefile mpdecimal.h])
 AC_ARG_VAR(MACHINE, [force configuration: x64, uint128, ansi64, ppro, ansi32, ansi-legacy])
@@ -101,11 +101,23 @@ fi
 AC_SUBST(GMPDEPS)
 AC_SUBST(GMPPATH)
 
+# Availability of -O2:
+AC_MSG_CHECKING(for -O2)
+saved_cflags="$CFLAGS"
+CFLAGS="-O2"
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[
+]])],[have_O2=yes],[have_O2=no])
+AC_MSG_RESULT($have_O2)
+CFLAGS="$saved_cflags"
+
 # _FORTIFY_SOURCE wrappers for memmove and bcopy are incorrect:
 # http://sourceware.org/ml/libc-alpha/2010-12/msg00009.html
 AC_MSG_CHECKING(for glibc _FORTIFY_SOURCE/memmove bug)
 saved_cflags="$CFLAGS"
 CFLAGS="-O2 -D_FORTIFY_SOURCE=2"
+if test "$have_O2" = no; then
+    CFLAGS=""
+fi
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
 #include <stdio.h>
 #include <stdlib.h>
@@ -157,7 +169,7 @@ case $CC in
         MPD_OPT="-O2 -fpic -s"
         MPD_PGEN="-fprofile-generate -fprofile-values"
         MPD_PUSE="-fprofile-use -freorder-blocks"
-        MPD_CCOV="-DTEST_COVERAGE -O0 -g -fno-inline -fprofile-arcs -ftest-coverage -fpic"
+        MPD_CCOV="-O0 -g -fno-inline -fprofile-arcs -ftest-coverage -fpic"
         MPD_LDCOV="-fprofile-arcs"
         ;;
     *icc*)
@@ -175,10 +187,18 @@ case $CC in
         MPD_WARN=
         MPD_OPT="-O2 -fpic -s"
         ;;
+    *ccomp*)
+        MPD_WARN=
+        MPD_CONFIG="-DCONFIG_32 -DANSI -DLEGACY_COMPILER"
+        MPD_OPT="-fstruct-passing -fstruct-assign"
+        LD="gcc"
+        LDFLAGS="-m32"
+        ;;
 esac
 
 # Values for the MPD_HEADER_CONFIG variable:
 CONFIG_64="
+/* ABI: 64-bit */
 #ifdef CONFIG_32
   #error \"cannot use CONFIG_32 with 64-bit header.\"
 #endif
@@ -188,6 +208,7 @@ CONFIG_64="
 #endif"
 
 CONFIG_32="
+/* ABI: 32-bit */
 #ifdef CONFIG_64
   #error \"cannot use CONFIG_64 with 32-bit header.\"
 #endif
@@ -196,7 +217,23 @@ CONFIG_32="
   #define CONFIG_32
 #endif"
 
+CONFIG_32_LEGACY="
+/* ABI: 32-bit */
+#ifdef CONFIG_64
+  #error \"cannot use CONFIG_64 with 32-bit header.\"
+#endif
+
+#ifndef CONFIG_32
+  #define CONFIG_32
+#endif
+
+/* libmpdec was compiled without support for int64_t */
+#ifndef LEGACY_COMPILER
+  #define LEGACY_COMPILER
+#endif"
+
 CONFIG_UNIVERSAL="
+/* Mac OS X: support for building universal binaries */
 #if defined(CONFIG_64) || defined(CONFIG_32)
   #error \"cannot use CONFIG_64 or CONFIG_32 with universal header.\"
 #endif
@@ -218,6 +255,7 @@ CONFIG_UNIVERSAL="
 #endif"
 
 CONFIG_FULLCOV="
+/* DO NOT USE IN PRODUCTION! */
 #if defined(CONFIG_64) || !defined(CONFIG_32)
   #error \"CONFIG_32 must be defined for full coverage.\"
 #endif"
@@ -244,7 +282,15 @@ elif test $ac_cv_sizeof_size_t -eq 8; then
         MACHINE="ansi64"
     fi
 else
-    MACHINE="ansi32"
+    # Macros for detecting uint64_t and int64_t are unreliable:
+    case $CC in
+        *ccomp*)
+            MACHINE="ansi-legacy"
+            ;;
+        *)
+            MACHINE="ansi32"
+            ;;
+    esac
     if test $have_gcc_asm_for_x87 = yes; then
         case $CC in
             *gcc*|*clang*) # icc >= 11.0 works as well
@@ -289,7 +335,7 @@ case "$MACHINE" in
     full_coverage)
         # Formerly ansi64c32, for testing only!
         MPD_HEADER_CONFIG=$CONFIG_FULLCOV
-        MPD_CONFIG=$M64"-DCONFIG_32 -DANSI"
+        MPD_CONFIG=$M64"-DTEST_COVERAGE -DCONFIG_32 -DANSI"
         CONFIGURE_LDFLAGS=$M64
         ;;
     ppro)
@@ -340,7 +386,7 @@ case "$MACHINE" in
         CONFIGURE_LDFLAGS=$M32
         ;;
     ansi-legacy)
-        MPD_HEADER_CONFIG=$CONFIG_32
+        MPD_HEADER_CONFIG=$CONFIG_32_LEGACY
         MPD_CONFIG=$M32"-DCONFIG_32 -DANSI -DLEGACY_COMPILER"
         CONFIGURE_LDFLAGS=$M32
         ;;
@@ -351,6 +397,10 @@ esac
 
 
 # Substitute variables and generate output:
+if test -z "$LD"; then
+    LD="$CC"
+fi
+AC_SUBST(LD)
 AC_SUBST(AR)
 AC_SUBST(MPD_HEADER)
 AC_SUBST(MPD_WARN)

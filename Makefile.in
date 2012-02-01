@@ -11,7 +11,7 @@ LIBSONAME = @LIBSHARED@
 LIBSHARED = @LIBSHARED@
 
 CC = @CC@
-LD = @CC@
+LD = @LD@
 AR = @AR@
 GCOV ?= gcov
 prefix = @prefix@
@@ -223,13 +223,19 @@ build_libcoverage: clean $(LIBSTATIC)
 build_pycoverage: build_libcoverage cdecimal2.so cdecimal3.so
 
 libcoverage: build_libcoverage
-	cd tests && ./runshort.sh && ./cov && ./test_transpose && ./fntcov
-	for file in *.c; do $(GCOV) -l "$$file"; done
+	@echo ""
+	@cd tests && ./runshort.sh && ./cov && ./test_transpose && ./fntcov
+	@for file in *.c; do $(GCOV) -l "$$file" > /dev/null 2>&1; done
+	@echo ""
+	@./tests/covreport.py
 
 pycoverage: build_pycoverage
-	cd python && cp ../cdecimal2.so cdecimal.so && ./gettests.sh && $(PYTHON2EXEC) test_cdecimal2.py && $(PYTHON2EXEC) deccheck2.py
-	cd python && cp ../cdecimal3.so cdecimal.so && ./gettests.sh && $(PYTHON3EXEC) test_cdecimal3.py && $(PYTHON3EXEC) deccheck3.py
-	for file in *.c; do $(GCOV) -l "$$file"; done
+	@echo ""
+	@cd python && cp ../cdecimal2.so cdecimal.so && ./gettests.sh && $(PYTHON2EXEC) test_cdecimal2.py
+	@cd python && cp ../cdecimal3.so cdecimal.so && ./gettests.sh && $(PYTHON3EXEC) test_cdecimal3.py
+	@for file in *.c; do $(GCOV) -l "$$file" > /dev/null 2>&1; done
+	@echo ""
+	@./tests/covreport.py
 
 coverage: build_libcoverage build_pycoverage libcoverage pycoverage
 
@@ -265,9 +271,9 @@ clean: FORCE
 	cd tests && if [ -f Makefile ]; then $(MAKE) clean; else exit 0; fi
 
 distclean: clean
-	rm -rf config.h config.log config.status Makefile mpdecimal.h
+	rm -f config.h config.log config.status Makefile mpdecimal.h
 	echo "" > vars.mk
-	cd tests && rm -rf Makefile dectest.zip testdata
+	cd tests && if [ -f Makefile ]; then $(MAKE) distclean; else exit 0; fi
 	cd python && rm -rf decimaltestdata build __pycache__
 
 

@@ -4,6 +4,8 @@ cd ..\
 copy /y Makefile.vc Makefile
 cd tests
 copy /y Makefile.vc Makefile
+call gettests.bat
+call getdn.bat
 
 
 call vcvarsall x64
@@ -15,7 +17,7 @@ echo # ========================================================================
 echo.
 cd ..\
 nmake clean
-nmake MACHINE=x64 extended_gmp
+nmake MACHINE=x64 extended_deccheck
 cd tests
 call runalltests.bat
 
@@ -27,7 +29,7 @@ echo # ========================================================================
 echo.
 cd ..\
 nmake clean
-nmake MACHINE=ansi64 extended_gmp
+nmake MACHINE=ansi64 extended_deccheck
 cd tests
 call runalltests.bat
 
@@ -39,7 +41,7 @@ echo # ========================================================================
 echo.
 cd ..\
 nmake clean
-nmake MACHINE=full_coverage extended_gmp
+nmake MACHINE=full_coverage extended_deccheck
 cd tests
 call runalltests.bat
 
@@ -53,7 +55,7 @@ echo # ========================================================================
 echo.
 cd ..\
 nmake clean
-nmake MACHINE=ppro extended_gmp
+nmake MACHINE=ppro extended_deccheck
 cd tests
 call runalltests.bat
 
@@ -64,7 +66,7 @@ echo # ========================================================================
 echo.
 cd ..\
 nmake clean
-nmake MACHINE=ansi32 extended_gmp
+nmake MACHINE=ansi32 extended_deccheck
 cd tests
 call runalltests.bat
 
@@ -75,7 +77,7 @@ echo # ========================================================================
 echo.
 cd ..\
 nmake clean
-nmake MACHINE=ansi-legacy extended_gmp
+nmake MACHINE=ansi-legacy extended_deccheck
 cd tests
 call runalltests.bat
 

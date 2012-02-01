@@ -187,7 +187,7 @@ mpd_bsf(mpd_size_t a)
 /* END MASM (_MSC_VER) */
 #else
   #error "missing preprocessor definitions"
-#endif /* BSR/BSF */
+#endif /* BSR/BSF */
 
 
 #endif /* BITS_H */

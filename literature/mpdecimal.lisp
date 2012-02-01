@@ -35,15 +35,66 @@
 ;;                Proof for a section in mpdecimal.c
 ;; =====================================================================
 
+;; _mpd_check_exp()
 
-(thm checkexp-1
+; adjexp < emin, exp >= etiny
+(defthm subnormal-fits-prec
   (implies (and (integerp exp) (integerp digits)
                 (integerp emin) (integerp prec)
                 (integerp shift)
-                (< (+ exp digits -1) emin)
-                (< exp (+ emin (- prec) 1))
-                (= shift (+ emin (- prec) 1 (- exp))))
-           (and (> shift 0)
-                (> shift (+ digits (- prec)))
-                (< (- digits shift) prec))))
+                (= adjexp (+ exp digits -1))
+                (= etiny (+ emin (- prec) 1))
+                (< adjexp emin)
+                (>= exp etiny))
+            (< digits prec)))
+
+; adjexp < emin, exp < etiny
+(defthm scale-to-etiny-shift>0
+  (implies (and (integerp exp) (integerp digits)
+                (integerp emin) (integerp prec)
+                (integerp shift)
+                (= etiny (+ emin (- prec) 1))
+                (< exp etiny)
+                (= shift (- etiny exp)))
+            (< 0 shift)))
+
+(defthm scale-to-etiny-result-fits-prec
+  (implies (and (integerp exp) (integerp digits)
+                (integerp emin) (integerp prec)
+                (integerp shift)
+                (= adjexp (+ exp digits -1))
+                (= etiny (+ emin (- prec) 1))
+                (< adjexp emin)
+                (= shift (- etiny exp)))
+            (< (- digits shift) prec)))
+
+; adjexp <= emax, exp > etop
+(defthm scale-to-etop-shift>0
+  (implies (and (integerp exp) (integerp digits)
+                (integerp emax) (integerp prec)
+                (integerp shift)
+                (= etop (+ emax (- prec) 1))
+                (> exp etop)
+                (= shift (- exp etop)))
+            (< 0 shift)))
+
+(defthm scale-to-etop-result-fits-prec
+  (implies (and (integerp exp) (integerp digits)
+                (integerp emax) (integerp prec)
+                (integerp shift)
+                (= etop (+ emax (- prec) 1))
+		(= adjexp (+ exp digits -1))
+                (<= adjexp emax)
+                (= shift (- exp etop)))
+            (<= (+ digits shift) prec)))
+
+(defthm scale-to-etop-underflow-impossible
+  (implies (and (integerp exp) (integerp emax)
+                (integerp emin) (integerp prec)
+                (= etiny (+ emin (- prec) 1))
+                (= etop (+ emax (- prec) 1))
+                (< exp etiny)
+                (> exp etop))
+           (< emax emin)))
+
 

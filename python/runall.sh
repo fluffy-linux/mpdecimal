@@ -4,7 +4,7 @@
 # Run all tests for the supported Python versions (>= 2.5)
 
 PY2_VERSIONS="2.5 2.6 2.7"
-PY3_VERSIONS="3.1 3.2"
+PY3_VERSIONS="3.1 3.2 3.3"
 
 ./gettests.sh
 
@@ -43,12 +43,12 @@ for py_version in $PY2_VERSIONS; do
         echo ""
         echo "========================= deccheck ==========================="
         echo ""
-        $py_exec deccheck2.py || exit 1
+        $py_exec deccheck2.py
         echo ""
         echo ""
         echo "======================= ctx-deccheck ========================="
         echo ""
-        $py_exec ctx-deccheck2.py || exit 1
+        $py_exec ctx-deccheck2.py
     done
 done
 
@@ -75,12 +75,7 @@ for py_version in $PY3_VERSIONS; do
         echo ""
         echo "========================= deccheck ==========================="
         echo ""
-        $py_exec deccheck3.py || exit 1
-        echo ""
-        echo ""
-        echo "======================= ctx-deccheck ========================="
-        echo ""
-        $py_exec ctx-deccheck3.py || exit 1
+        $py_exec deccheck3.py
     done
 done
 

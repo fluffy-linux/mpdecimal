@@ -41,6 +41,7 @@
 import cdecimal, decimal
 import sys, inspect
 import array
+import random
 
 from copy import copy
 from randdec import *
@@ -56,6 +57,11 @@ py_minor = sys.version_info[1]
 py_micro = sys.version_info[2]
 if py_minor >= 7:
     from randfloat import *
+HAVE_FORMATHELPER = True
+try:
+    from formathelper import rand_format, rand_locale
+except:
+    HAVE_FORMATHELPER = False
 
 if py_minor == 5 and py_micro <= 4:
     # decimal.py has additional bugs, not worth sorting them out individually.
@@ -411,25 +417,43 @@ class dHandlerCdec:
         self.ulpdiff += 1
         return self.check_ulpdiff(exact, rounded)
 
+    def resolve_underflow(self, result):
+        """In extremely rare cases where the infinite precision result is just
+           below etiny, cdecimal does not set Subnormal/Underflow. Example:
+
+           setcontext(Context(prec=21, rounding=ROUND_UP, Emin=-55, Emax=85))
+           Decimal("1.00000000000000000000000000000000000000000000000"
+                   "0000000100000000000000000000000000000000000000000"
+                   "0000000000000025").ln()
+        """
+        if str(result.mpd) != str(result.dec):
+            return False # Results must be identical.
+        if context.f.flags[cdecimal.Rounded] and \
+           context.f.flags[cdecimal.Inexact] and \
+           context.d.flags[decimal.Rounded] and \
+           context.d.flags[decimal.Inexact]:
+            return True # Subnormal/Underflow may be missing.
+        return False
+
     def exp(self, result, operands):
         if result.mpd.is_nan() or result.dec.is_nan():
             return False
         if context.f._allcr:
-            return False
+            return self.resolve_underflow(result)
         return self.un_resolve_ulp(result, "exp", operands)
 
     def log10(self, result, operands):
         if result.mpd.is_nan() or result.dec.is_nan():
             return False
         if context.f._allcr:
-            return False
+            return self.resolve_underflow(result)
         return self.un_resolve_ulp(result, "log10", operands)
 
     def ln(self, result, operands):
         if result.mpd.is_nan() or result.dec.is_nan():
             return False
         if context.f._allcr:
-            return False
+            return self.resolve_underflow(result)
         return self.un_resolve_ulp(result, "ln", operands)
 
     def __pow__(self, result, operands):
@@ -463,6 +487,15 @@ class dHandlerCdec:
             return True
         return False
     __rmul__ = __radd__
+
+    # Fixed in 2.7.2.
+    def plus(self, result, operands):
+        """special cases for zero/ROUND_FLOOR"""
+        if context.f.rounding == cdecimal.ROUND_FLOOR:
+            if operands[0].mpd.is_zero():
+                return True
+        return False
+    minus = __neg__ = __pos__ = plus
 
     if py_minor <= 6:
         def rotate(self, result, operands):
@@ -526,6 +559,7 @@ class dHandlerObj():
             """cdecimal raises for all sNaN comparisons"""
             if operands[0].mpd.is_snan() or operands[1].mpd.is_snan():
                 return True
+            return False
         __ne__ = __eq__
 
     if py_minor <= 6:
@@ -535,6 +569,7 @@ class dHandlerObj():
             # Issue7099
             if operands[0].mpd.is_normal():
                 return True
+            return False
 
     if py_minor <= 5:
         """decimal.py uses double quotes instead of single quotes."""
@@ -1042,7 +1077,7 @@ class cdec(object):
         return self.binaryfunc(other, 'quantize')
 
     def radix(self):
-        return self.obj_unaryfunc('radix')
+        return self.unaryfunc('radix')
 
     # real
     # reduce: same as normalize
@@ -1553,10 +1588,9 @@ if __name__ == '__main__':
     test_method('quantize_api', testspecs, test_quantize_api)
 
 
-    if py_minor >= 7:
+    if HAVE_FORMATHELPER and py_minor >= 7:
         # Some tests will fail with 2.6, since alignment has been changed
         # in decimal.py 2.7.
-        from genlocale import *
         test_method('format', testspecs, test_format)
         test_method('locale', testspecs, test_locale)
         test_method('from_float', testspecs, test_from_float)

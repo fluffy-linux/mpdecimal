@@ -17,7 +17,7 @@
 
 # Specific configurations for setup.py
 PY2_VERSIONS="r25 r251 r252 r253 r254 r255 r26 r261 r262 r263 r264 r265 r266 r27 r271"
-PY3_VERSIONS="r31 r311 r312 r313"
+PY3_VERSIONS="r31 r311 r312 r313 r32"
 
 # gmake required
 GMAKE=`which gmake`
@@ -40,7 +40,7 @@ print_config ()
 }
 
 ./gettests.sh
-# ./build_all_releases.sh
+./build_all_releases.sh
 
 for py_version in $PY2_VERSIONS $PY3_VERSIONS; do
     for pyargs in "--without-threads" ""; do
@@ -68,10 +68,10 @@ for py_version in $PY2_VERSIONS $PY3_VERSIONS; do
                 deccheck=deccheck2.py
                 ctx_deccheck=ctx-deccheck2.py
                 ;;
-            *31*)
+            *31*|*32*)
                 decimal_tests=test_cdecimal3.py
                 deccheck=deccheck3.py
-                ctx_deccheck=ctx-deccheck3.py
+                ctx_deccheck='-c print("\ndeccheck3_includes_context_tests\n\n")'
                 ;;
             *) exit 1 ;;
         esac

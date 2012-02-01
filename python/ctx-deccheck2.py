@@ -32,6 +32,7 @@
 
 import cdecimal, decimal
 import sys, inspect
+import random
 from copy import copy
 from randdec import *
 
@@ -376,25 +377,43 @@ class dHandlerCdec:
         self.ulpdiff += 1
         return self.check_ulpdiff(exact, rounded)
 
+    def resolve_underflow(self, result):
+        """In extremely rare cases where the infinite precision result is just
+           below etiny, cdecimal does not set Subnormal/Underflow. Example:
+
+           setcontext(Context(prec=21, rounding=ROUND_UP, Emin=-55, Emax=85))
+           Decimal("1.00000000000000000000000000000000000000000000000"
+                   "0000000100000000000000000000000000000000000000000"
+                   "0000000000000025").ln()
+        """
+        if str(result.mpd) != str(result.dec):
+            return False # Results must be identical.
+        if context.f.flags[cdecimal.Rounded] and \
+           context.f.flags[cdecimal.Inexact] and \
+           context.d.flags[decimal.Rounded] and \
+           context.d.flags[decimal.Inexact]:
+            return True # Subnormal/Underflow may be missing.
+        return False
+
     def exp(self, result, operands):
         if result.mpd.is_nan() or result.dec.is_nan():
             return False
         if context.f._allcr:
-            return False
+            return self.resolve_underflow(result)
         return self.un_resolve_ulp(result, "exp", operands)
 
     def log10(self, result, operands):
         if result.mpd.is_nan() or result.dec.is_nan():
             return False
         if context.f._allcr:
-            return False
+            return self.resolve_underflow(result)
         return self.un_resolve_ulp(result, "log10", operands)
 
     def ln(self, result, operands):
         if result.mpd.is_nan() or result.dec.is_nan():
             return False
         if context.f._allcr:
-            return False
+            return self.resolve_underflow(result)
         return self.un_resolve_ulp(result, "ln", operands)
 
     def __pow__(self, result, operands):
@@ -420,6 +439,15 @@ class dHandlerCdec:
         else:
             return False
     power = __pow__
+
+    # Fixed in 2.7.2.
+    def plus(self, result, operands):
+        """special cases for zero/ROUND_FLOOR"""
+        if context.f.rounding == cdecimal.ROUND_FLOOR:
+            if operands[0].mpd.is_zero():
+                return True
+        return False
+    minus = __neg__ = __pos__ = plus
 
     if py_minor <= 6:
         def rotate(self, result, operands):
@@ -482,6 +510,7 @@ class dHandlerObj():
             # Issue7099
             if operands[0].mpd.is_normal():
                 return True
+            return False
 
 
 dhandler_cdec = dHandlerCdec()

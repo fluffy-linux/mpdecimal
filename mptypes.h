@@ -38,9 +38,11 @@
 
 #if defined(CONFIG_64)
   #if defined(_MSC_VER) || defined(__OpenBSD__) || defined(__APPLE__)
+    #define PRI_mpd_uint_t "llu"
     #define PRI_mpd_size_t "llu"
     #define PRI_mpd_ssize_t "lld"
   #else
+    #define PRI_mpd_uint_t "lu"
     #define PRI_mpd_size_t "lu"
     #define PRI_mpd_ssize_t "ld"
   #endif
@@ -48,9 +50,12 @@
   #define CONV_mpd_ssize_t "L"
   #define ONE_UM 1ULL
 #elif defined(CONFIG_32)
+  #define PRI_mpd_uint_t "u"
   #define PRI_mpd_size_t "u"
   #define PRI_mpd_ssize_t "d"
   #if defined (__OpenBSD__)
+    #undef PRI_mpd_size_t
+    #define PRI_mpd_size_t "lu"
     #define PRI_time_t "d"
   #elif defined(__FreeBSD__)
     #if defined(__x86_64__)

@@ -27,138 +27,224 @@
 # SUCH DAMAGE.
 #
 
-
-#
-# The cdec (for "check decimal") class checks cdecimal.so against decimal.py.
-# A cdec object consists of a cdecimal.Decimal and a decimal.Decimal. Every
-# operation is carried out on both types. If the results don't match, an
-# exception is raised.
 #
 # Usage: python deccheck.py [--short|--medium|--long|--all]
 #
 
-
-import cdecimal, decimal
-import sys, inspect
-import array
-
+import sys, random
 from copy import copy
-from randdec import *
-from randfloat import *
+from collections import defaultdict
+from randdec import randfloat, all_unary, all_binary, all_ternary
+from formathelper import rand_format, rand_locale
 
-
+import cdecimal as C
+import decimal as P
 EXIT_STATUS = 0
-py_minor = sys.version_info[1]
-py_micro = sys.version_info[2]
 
+py_minor = sys.version_info[1]
+
+
+# Contains all categories of Decimal methods.
+Functions = {
+    # Plain unary:
+    'unary': (
+        '__abs__', '__bool__', '__complex__', '__copy__', '__float__',
+        '__hash__', '__int__', '__neg__', '__pos__', '__reduce__', '__repr__',
+        '__str__', '__trunc__', 'adjusted', 'as_tuple', 'canonical',
+        'conjugate', 'copy_abs', 'copy_negate', 'is_canonical', 'is_finite',
+        'is_infinite', 'is_nan', 'is_qnan', 'is_signed', 'is_snan', 'is_zero',
+        'radix'
+    ),
+    # Unary with optional context:
+    'unary_ctx': (
+        'exp', 'is_normal', 'is_subnormal', 'ln', 'log10', 'logb',
+        'logical_invert', 'next_minus', 'next_plus', 'normalize',
+        'number_class', 'sqrt', 'to_eng_string'
+    ),
+    # Unary with optional rounding mode and context:
+    'unary_rnd_ctx': ('to_integral', 'to_integral_exact', 'to_integral_value'),
+    # Plain binary:
+    'binary': (
+        '__add__', '__divmod__', '__eq__', '__floordiv__', '__ge__', '__gt__',
+        '__le__', '__lt__', '__mod__', '__mul__', '__ne__', '__pow__',
+        '__radd__', '__rdivmod__', '__rfloordiv__', '__rmod__', '__rmul__',
+        '__rpow__', '__rsub__', '__rtruediv__', '__sub__', '__truediv__',
+        'compare_total', 'compare_total_mag', 'copy_sign', 'quantize',
+        'same_quantum'
+    ),
+    # Binary with optional context:
+    'binary_ctx': (
+        'compare', 'compare_signal', 'logical_and', 'logical_or', 'logical_xor',
+        'max', 'max_mag', 'min', 'min_mag', 'next_toward', 'remainder_near',
+        'rotate', 'scaleb', 'shift'
+    ),
+    # Ternary with optional context:
+    'ternary_ctx': ('fma',),
+    # Special:
+    'special': ('__format__', '__reduce_ex__', '__round__', 'from_float',
+                'quantize'),
+    # Properties:
+    'property': ('real', 'imag')
+}
+
+# Contains all categories of Context methods. The n-ary classification
+# applies to the number of Decimal arguments.
+ContextFunctions = {
+    # Plain nullary:
+    'nullary': ('context.__hash__', 'context.__reduce__', 'context.radix'),
+    # Plain unary:
+    'unary': ('context.abs', 'context.canonical', 'context.copy_abs',
+              'context.copy_decimal', 'context.copy_negate',
+              'context.create_decimal', 'context.exp', 'context.is_canonical',
+              'context.is_finite', 'context.is_infinite', 'context.is_nan',
+              'context.is_normal', 'context.is_qnan', 'context.is_signed',
+              'context.is_snan', 'context.is_subnormal', 'context.is_zero',
+              'context.ln', 'context.log10', 'context.logb',
+              'context.logical_invert', 'context.minus', 'context.next_minus',
+              'context.next_plus', 'context.normalize', 'context.number_class',
+              'context.plus', 'context.sqrt', 'context.to_eng_string',
+              'context.to_integral', 'context.to_integral_exact',
+              'context.to_integral_value', 'context.to_sci_string'
+    ),
+    # Plain binary:
+    'binary': ('context.add', 'context.compare', 'context.compare_signal',
+               'context.compare_total', 'context.compare_total_mag',
+               'context.copy_sign', 'context.divide', 'context.divide_int',
+               'context.divmod', 'context.logical_and', 'context.logical_or',
+               'context.logical_xor', 'context.max', 'context.max_mag',
+               'context.min', 'context.min_mag', 'context.multiply',
+               'context.next_toward', 'context.power', 'context.quantize',
+               'context.remainder', 'context.remainder_near', 'context.rotate',
+               'context.same_quantum', 'context.scaleb', 'context.shift',
+               'context.subtract'
+    ),
+    # Plain ternary:
+    'ternary': ('context.fma',),
+    # Special:
+    'special': ('context.__reduce_ex__', 'context.create_decimal_from_float')
+}
+
+# Functions that require a restricted exponent range for reasonable runtimes.
+UnaryRestricted = [
+  '__int__', '__long__', '__trunc__', 'to_integral', 'to_integral_value',
+  'to_integral_value'
+]
+
+BinaryRestricted = ['__round__']
+
+if py_minor <= 2:
+    BinaryRestricted.extend(['__pow__', '__rpow__', 'context.power'])
+
+
+# ======================================================================
+#                            Unified Context
+# ======================================================================
 
 # Translate symbols.
-deccond = {
-        cdecimal.Clamped:             decimal.Clamped,
-        cdecimal.ConversionSyntax:    decimal.ConversionSyntax,
-        cdecimal.DivisionByZero:      decimal.DivisionByZero,
-        cdecimal.DivisionImpossible:  decimal.InvalidOperation,
-        cdecimal.DivisionUndefined:   decimal.DivisionUndefined,
-        cdecimal.Inexact:             decimal.Inexact,
-        cdecimal.InvalidContext:      decimal.InvalidContext,
-        cdecimal.InvalidOperation:    decimal.InvalidOperation,
-        cdecimal.Overflow:            decimal.Overflow,
-        cdecimal.Rounded:             decimal.Rounded,
-        cdecimal.Subnormal:           decimal.Subnormal,
-        cdecimal.Underflow:           decimal.Underflow,
+CondMap = {
+        C.Clamped:             P.Clamped,
+        C.ConversionSyntax:    P.ConversionSyntax,
+        C.DivisionByZero:      P.DivisionByZero,
+        C.DivisionImpossible:  P.InvalidOperation,
+        C.DivisionUndefined:   P.DivisionUndefined,
+        C.Inexact:             P.Inexact,
+        C.InvalidContext:      P.InvalidContext,
+        C.InvalidOperation:    P.InvalidOperation,
+        C.Overflow:            P.Overflow,
+        C.Rounded:             P.Rounded,
+        C.Subnormal:           P.Subnormal,
+        C.Underflow:           P.Underflow,
 }
 
-mpdcond = {
-        decimal.Clamped:           cdecimal.Clamped,
-        decimal.ConversionSyntax:  cdecimal.ConversionSyntax,
-        decimal.DivisionByZero:    cdecimal.DivisionByZero,
-        decimal.InvalidOperation:  cdecimal.DivisionImpossible,
-        decimal.DivisionUndefined: cdecimal.DivisionUndefined,
-        decimal.Inexact:           cdecimal.Inexact,
-        decimal.InvalidContext:    cdecimal.InvalidContext,
-        decimal.InvalidOperation:  cdecimal.InvalidOperation,
-        decimal.Overflow:          cdecimal.Overflow,
-        decimal.Rounded:           cdecimal.Rounded,
-        decimal.Subnormal:         cdecimal.Subnormal,
-        decimal.Underflow:         cdecimal.Underflow
+RoundMap = {
+        C.ROUND_UP:           P.ROUND_UP,
+        C.ROUND_DOWN:         P.ROUND_DOWN,
+        C.ROUND_CEILING:      P.ROUND_CEILING,
+        C.ROUND_FLOOR:        P.ROUND_FLOOR,
+        C.ROUND_HALF_UP:      P.ROUND_HALF_UP,
+        C.ROUND_HALF_DOWN:    P.ROUND_HALF_DOWN,
+        C.ROUND_HALF_EVEN:    P.ROUND_HALF_EVEN,
+        C.ROUND_05UP:         P.ROUND_05UP
 }
-
-decround = {
-        cdecimal.ROUND_UP:           decimal.ROUND_UP,
-        cdecimal.ROUND_DOWN:         decimal.ROUND_DOWN,
-        cdecimal.ROUND_CEILING:      decimal.ROUND_CEILING,
-        cdecimal.ROUND_FLOOR:        decimal.ROUND_FLOOR,
-        cdecimal.ROUND_HALF_UP:      decimal.ROUND_HALF_UP,
-        cdecimal.ROUND_HALF_DOWN:    decimal.ROUND_HALF_DOWN,
-        cdecimal.ROUND_HALF_EVEN:    decimal.ROUND_HALF_EVEN,
-        cdecimal.ROUND_05UP:         decimal.ROUND_05UP
-}
+RoundModes = RoundMap.items()
 
 
 class Context(object):
-    """Provides a convenient way of syncing the cdecimal and decimal contexts"""
+    """Provides a convenient way of syncing the C and P contexts"""
 
-    __slots__ = ['f', 'd']
+    __slots__ = ['c', 'p']
 
-    def __init__(self, mpdctx=cdecimal.getcontext()):
-        """Initialization is from the cdecimal context"""
-        self.f = mpdctx
-        self.d = decimal.getcontext()
-        self.d.prec = self.f.prec
-        self.d.Emin = self.f.Emin
-        self.d.Emax = self.f.Emax
-        self.d.rounding = decround[self.f.rounding]
-        self.d.capitals = self.f.capitals
-        self.settraps([sig for sig in self.f.traps if self.f.traps[sig]])
-        self.setstatus([sig for sig in self.f.flags if self.f.flags[sig]])
-        self.d._clamp = self.f._clamp
+    def __init__(self, c_ctx=C.getcontext(), p_ctx=P.getcontext()):
+        """Initialization is from the C context"""
+        self.c = c_ctx
+        self.p = p_ctx
+        self.p.prec = self.c.prec
+        self.p.Emin = self.c.Emin
+        self.p.Emax = self.c.Emax
+        self.p.rounding = RoundMap[self.c.rounding]
+        self.p.capitals = self.c.capitals
+        self.settraps([sig for sig in self.c.traps if self.c.traps[sig]])
+        self.setstatus([sig for sig in self.c.flags if self.c.flags[sig]])
+        self.p.clamp = self.c.clamp
+
+    def __str__(self):
+        return str(self.c) + '\n' + str(self.p)
 
     def getprec(self):
-        assert(self.f.prec == self.d.prec)
-        return self.f.prec
+        assert(self.c.prec == self.p.prec)
+        return self.c.prec
 
     def setprec(self, val):
-        self.f.prec = val
-        self.d.prec = val
+        self.c.prec = val
+        self.p.prec = val
 
     def getemin(self):
-        assert(self.f.Emin == self.d.Emin)
-        return self.f.Emin
+        assert(self.c.Emin == self.p.Emin)
+        return self.c.Emin
 
     def setemin(self, val):
-        self.f.Emin = val
-        self.d.Emin = val
+        self.c.Emin = val
+        self.p.Emin = val
 
     def getemax(self):
-        assert(self.f.Emax == self.d.Emax)
-        return self.f.Emax
+        assert(self.c.Emax == self.p.Emax)
+        return self.c.Emax
 
     def setemax(self, val):
-        self.f.Emax = val
-        self.d.Emax = val
+        self.c.Emax = val
+        self.p.Emax = val
 
     def getround(self):
-        return self.d.rounding
+        assert(self.c.rounding == RoundMap[self.p.rounding])
+        return self.c.rounding
 
     def setround(self, val):
-        self.f.rounding = val
-        self.d.rounding = decround[val]
+        self.c.rounding = val
+        self.p.rounding = RoundMap[val]
 
     def getcapitals(self):
-        assert(self.f.capitals == self.d.capitals)
-        return self.f.capitals
+        assert(self.c.capitals == self.p.capitals)
+        return self.c.capitals
 
     def setcapitals(self, val):
-        self.f.capitals = val
-        self.d.capitals = val
+        self.c.capitals = val
+        self.p.capitals = val
 
     def getclamp(self):
-        assert(self.f._clamp == self.d._clamp)
-        return self.f._clamp
+        if py_minor >= 3:
+            assert(self.c.clamp == self.p.clamp)
+            return self.c.clamp
+        else:
+            assert(self.c._clamp == self.p._clamp)
+            return self.c._clamp
 
     def setclamp(self, val):
-        self.f._clamp = val
-        self.d._clamp = val
+        if py_minor >= 3:
+            self.c.clamp = val
+            self.p.clamp = val
+        else:
+            self.c._clamp = val
+            self.p._clamp = val
 
     prec = property(getprec, setprec)
     Emin = property(getemin, setemin)
@@ -168,169 +254,181 @@ class Context(object):
     capitals = property(getcapitals, setcapitals)
 
     def clear_traps(self):
-        self.f.clear_traps()
-        for trap in self.d.traps:
-            self.d.traps[trap] = False
+        self.c.clear_traps()
+        for trap in self.p.traps:
+            self.p.traps[trap] = False
 
     def clear_status(self):
-        self.f.clear_flags()
-        self.d.clear_flags()
+        self.c.clear_flags()
+        self.p.clear_flags()
 
-    def settraps(self, lst): # cdecimal signal list
+    def settraps(self, lst):
+        """lst: C signal list"""
         self.clear_traps()
         for signal in lst:
-            self.f.traps[signal] = True
-            self.d.traps[deccond[signal]] = True
+            self.c.traps[signal] = True
+            self.p.traps[CondMap[signal]] = True
 
-    def setstatus(self, lst): # cdecimal signal list
+    def setstatus(self, lst):
+        """lst: C signal list"""
         self.clear_status()
         for signal in lst:
-            self.f.flags[signal] = True
-            self.d.flags[deccond[signal]] = True
+            self.c.flags[signal] = True
+            self.p.flags[CondMap[signal]] = True
 
     def assert_eq_status(self):
-        """assert equality of cdecimal and decimal status"""
-        for signal in self.f.flags:
-            if signal == cdecimal.FloatOperation:
+        """assert equality of C and P status"""
+        for signal in self.c.flags:
+            if signal == C.FloatOperation:
                 continue
-            if self.f.flags[signal] == (not self.d.flags[deccond[signal]]):
+            if self.c.flags[signal] == (not self.p.flags[CondMap[signal]]):
                 return False
         return True
 
 
 # We don't want exceptions so that we can compare the status flags.
 context = Context()
-context.Emin = cdecimal.MIN_EMIN
-context.Emax = cdecimal.MAX_EMAX
+context.Emin = C.MIN_EMIN
+context.Emax = C.MAX_EMAX
 context.clear_traps()
 
-# When creating decimals, cdecimal is ultimately limited by the maximum
+# When creating decimals, _decimal is ultimately limited by the maximum
 # context values. We emulate this restriction for decimal.py.
-maxcontext = decimal.Context(
-    prec=cdecimal.MAX_PREC,
-    Emin=cdecimal.MIN_EMIN,
-    Emax=cdecimal.MAX_EMAX,
-    rounding=decimal.ROUND_HALF_UP,
+maxcontext = P.Context(
+    prec=C.MAX_PREC,
+    Emin=C.MIN_EMIN,
+    Emax=C.MAX_EMAX,
+    rounding=P.ROUND_HALF_UP,
     capitals=1
 )
-maxcontext._clamp = 0
+if py_minor >= 3:
+    maxcontext.clamp = 0
+else:
+    maxcontext._clamp = 0
 
-def decimal_new(value):
-    maxcontext.traps = copy(context.d.traps)
+def RestrictedDecimal(value):
+    maxcontext.traps = copy(context.p.traps)
     maxcontext.clear_flags()
+    if isinstance(value, str):
+        value = value.strip()
     dec = maxcontext.create_decimal(value)
-    if maxcontext.flags[decimal.Inexact] or \
-       maxcontext.flags[decimal.Rounded]:
-        dec = decimal.Decimal("NaN")
-        context.d.flags[decimal.InvalidOperation] = True
+    if maxcontext.flags[P.Inexact] or \
+       maxcontext.flags[P.Rounded] or \
+       maxcontext.flags[P.InvalidOperation]:
+        return context.p._raise_error(P.InvalidOperation)
     return dec
 
 
-_exc_fmt = "\
-cdecimal_sci: %s\n\
-decimal_sci:  %s\n\
-cdecimal_eng: %s\n\
-decimal_eng:  %s\n"
+# ======================================================================
+#      TestSet: Organize data and events during a single test case
+# ======================================================================
 
-_exc_fmt_tuple = "\
-cdecimal_tuple: %s\n\
-decimal_tuple: %s\n"
+class RestrictedList(list):
+    """List that can only be modified by appending items."""
+    def __getattribute__(self, name):
+        if name != 'append':
+            raise AttributeError("unsupported operation")
+        return list.__getattribute__(self, name)
+    def unsupported(self, *_):
+        raise AttributeError("unsupported operation")
+    __add__ = __delattr__ = __delitem__ = __iadd__ = __imul__ = unsupported
+    __mul__ = __reversed__ = __rmul__ = __setattr__ = __setitem__ = unsupported
 
-_exc_fmt_obj = "\
-cdecimal: %s\n\
-decimal:  %s\n\n"
+class TestSet(object):
+    """A TestSet contains the original input operands, converted operands,
+       Python exceptions that occurred either during conversion or during
+       execution of the actual function, and the final results.
 
-class CdecException(ArithmeticError):
-    def __init__(self, result, funcname, operands, fctxstr, dctxstr):
-        self.errstring = "Error in %s(%s" % (funcname, operands[0])
-        for op in operands[1:]:
-            self.errstring += ", %s" % op
-        self.errstring += "):\n\n"
-        if isinstance(result, cdec):
-            self.errstring += _exc_fmt % (str(result.mpd),
-                                          str(result.dec),
-                                          result.mpd.to_eng(),
-                                          result.dec.to_eng_string())
-            mpd_tuple = result.mpd.as_tuple()
-            dec_tuple = result.dec.as_tuple()
-            if mpd_tuple != dec_tuple:
-                self.errstring += _exc_fmt_tuple % (str(mpd_tuple),
-                                                    str(dec_tuple))
+       For safety, most attributes are lists that only support the append
+       operation.
+
+       If a function name is prefixed with 'context.', the corresponding
+       context method is called.
+    """
+    def __init__(self, funcname, operands):
+        if funcname.startswith("context."):
+            self.funcname = funcname.replace("context.", "")
+            self.contextfunc = True
         else:
-            self.errstring += _exc_fmt_obj % (str(result[0]), str(result[1]))
-        self.errstring += "%s\n%s\n\n" % (fctxstr, dctxstr)
-    def __str__(self):
-        return self.errstring
+            self.funcname = funcname
+            self.contextfunc = False
+        self.op = operands               # raw operand tuple
+        self.context = context           # context used for the operation
+        self.cop = RestrictedList()      # converted C.Decimal operands 
+        self.cex = RestrictedList()      # Python exceptions for C.Decimal
+        self.cresults = RestrictedList() # C.Decimal results
+        self.pop = RestrictedList()      # converted P.Decimal operands
+        self.pex = RestrictedList()      # Python exceptions for P.Decimal
+        self.presults = RestrictedList() # P.Decimal results
 
 
-class dHandlerCdec:
-    """For cdec return values:
+# ======================================================================
+#                SkipHandler: skip known discrepancies
+# ======================================================================
 
-       Handle known disagreements between decimal.py and cdecimal.so.
-       This is just a temporary measure against cluttered output.
-       Detection is crude and possibly unreliable."""
+class SkipHandler:
+    """Handle known discrepancies between decimal.py and _decimal.so.
+       These are either ULP differences in the power function or
+       extremely minor issues."""
 
     def __init__(self):
-        self.logb_round_if_gt_prec = 0
         self.ulpdiff = 0
         self.powmod_zeros = 0
-        self.total_mag_nan = 0
-        self.quantize_status = 0
-        self.max_status = 0
-        self.maxctx = decimal.Context(Emax=10**18, Emin=-10**18)
+        self.maxctx = P.Context(Emax=10**18, Emin=-10**18)
 
-    def default(self, result, operands):
+    def default(self, t):
         return False
+    __ge__ =  __gt__ = __le__ = __lt__ = __ne__ = __eq__ = default
+    __reduce__ = __format__ = __repr__ = __str__ = default
 
     def harrison_ulp(self, dec):
-        """Harrison ULP: ftp://ftp.inria.fr/INRIA/publication/publi-pdf/RR/RR-5504.pdf"""
+        """ftp://ftp.inria.fr/INRIA/publication/publi-pdf/RR/RR-5504.pdf"""
         a = dec.next_plus()
         b = dec.next_minus()
         return abs(a - b)
 
     def standard_ulp(self, dec, prec):
-        return decimal._dec_from_triple(0, '1', dec._exp+len(dec._int)-prec)
+        return P._dec_from_triple(0, '1', dec._exp+len(dec._int)-prec)
 
     def rounding_direction(self, x, mode):
         """Determine the effective direction of the rounding when
            the exact result x is rounded according to mode.
            Return -1 for downwards, 0 for undirected, 1 for upwards,
            2 for ROUND_05UP."""
-        d = decimal
-        cmp = 1 if x.compare_total(d.Decimal("+0")) >= 0 else -1
+        cmp = 1 if x.compare_total(P.Decimal("+0")) >= 0 else -1
 
-        if mode in (d.ROUND_HALF_EVEN, d.ROUND_HALF_UP, d.ROUND_HALF_DOWN):
+        if mode in (P.ROUND_HALF_EVEN, P.ROUND_HALF_UP, P.ROUND_HALF_DOWN):
             return 0
-        elif mode == d.ROUND_CEILING:
+        elif mode == P.ROUND_CEILING:
             return 1
-        elif mode == d.ROUND_FLOOR:
+        elif mode == P.ROUND_FLOOR:
             return -1
-        elif mode == d.ROUND_UP:
+        elif mode == P.ROUND_UP:
             return cmp
-        elif mode == d.ROUND_DOWN:
+        elif mode == P.ROUND_DOWN:
             return -cmp
-        elif mode == d.ROUND_05UP:
+        elif mode == P.ROUND_05UP:
             return 2
         else:
             raise ValueError("Unexpected rounding mode: %s" % mode)
 
     def check_ulpdiff(self, exact, rounded):
         # current precision
-        p = context.d.prec
+        p = context.p.prec
 
         # Convert infinities to the largest representable number + 1.
         x = exact
         if exact.is_infinite():
-            x = decimal._dec_from_triple(exact._sign, '10', context.d.Emax)
+            x = P._dec_from_triple(exact._sign, '10', context.p.Emax)
         y = rounded
         if rounded.is_infinite():
-            y = decimal._dec_from_triple(rounded._sign, '10', context.d.Emax)
+            y = P._dec_from_triple(rounded._sign, '10', context.p.Emax)
 
         # err = (rounded - exact) / ulp(rounded)
         self.maxctx.prec = p * 2
         t = self.maxctx.subtract(y, x)
-        if context.f._flags & cdecimal.DecClamped or \
-           context.f._flags & cdecimal.DecUnderflow:
+        if context.c._flags & C.DecClamped or \
+           context.c._flags & C.DecUnderflow:
             # The standard ulp does not work in Underflow territory.
             ulp = self.harrison_ulp(y)
         else:
@@ -338,699 +436,487 @@ class dHandlerCdec:
         # Error in ulps.
         err = self.maxctx.divide(t, ulp)
 
-        d = decimal
-        dir = self.rounding_direction(x, context.d.rounding)
+        dir = self.rounding_direction(x, context.p.rounding)
         if dir == 0:
-            if d.Decimal("-0.6") < err < d.Decimal("0.6"):
+            if P.Decimal("-0.6") < err < P.Decimal("0.6"):
                 return True
         elif dir == 1: # directed, upwards
-            if d.Decimal("-0.1") < err < d.Decimal("1.1"):
+            if P.Decimal("-0.1") < err < P.Decimal("1.1"):
                 return True
         elif dir == -1: # directed, downwards
-            if d.Decimal("-1.1") < err < d.Decimal("0.1"):
+            if P.Decimal("-1.1") < err < P.Decimal("0.1"):
                 return True
         else: # ROUND_05UP
-            if d.Decimal("-1.1") < err < d.Decimal("1.1"):
+            if P.Decimal("-1.1") < err < P.Decimal("1.1"):
                 return True
 
-        print("ulp: %s  error: %s  exact: %s  mpd_rounded: %s"
+        print("ulp: %s  error: %s  exact: %s  c_rounded: %s"
               % (ulp, err, exact, rounded))
         return False
 
-    def un_resolve_ulp(self, result, funcname, operands):
-        """Check if results of cdecimal's exp, ln and log10 functions are
+    def un_resolve_ulp(self, t):
+        """Check if results of _decimal's exp, ln and log10 functions are
            within the allowed ulp ranges. This function is only called if
-           context.f._allcr is 0."""
-        # "exact" result, double precision, half_even
-        self.maxctx.prec = context.d.prec * 2
-        op = operands[0].dec
-        exact = getattr(op, funcname)(context=self.maxctx)
+           context.c._allcr is 0."""
+        # NaNs are beyond repair.
+        if t.rc.is_nan() or t.rp.is_nan():
+            return False
 
-        # cdecimal's rounded result
-        s = str(result.mpd)
-        rounded = decimal.Decimal(s)
+        # "exact" result, double precision, half_even
+        self.maxctx.prec = context.p.prec * 2
+
+        # op might not be a Decimal for context methods.
+        op = P.Decimal(t.pop[0])
+        exact = getattr(op, t.funcname)(context=self.maxctx)
+
+        # _decimal's rounded result
+        rounded = P.Decimal(t.cresults[0])
 
         self.ulpdiff += 1
         return self.check_ulpdiff(exact, rounded)
 
-    def bin_resolve_ulp(self, result, funcname, operands):
-        """Check if results of cdecimal's power function are within the
+    def bin_resolve_ulp(self, t):
+        """Check if results of _decimal's power function are within the
            allowed ulp ranges."""
-        # "exact" result, double precision, half_even
-        self.maxctx.prec = context.d.prec * 2
-        op1 = operands[0].dec
-        op2 = operands[1].dec
-        exact = getattr(op1, funcname)(op2, context=self.maxctx)
+        # NaNs are beyond repair.
+        if t.rc.is_nan() or t.rp.is_nan():
+            return False
 
-        # cdecimal's rounded result
-        s = str(result.mpd)
-        rounded = decimal.Decimal(s)
+        # "exact" result, double precision, half_even
+        self.maxctx.prec = context.p.prec * 2
+
+        op1, op2 = t.pop[0], t.pop[1]
+        if t.contextfunc:
+            exact = getattr(self.maxctx, t.funcname)(op1, op2)
+        else:
+            exact = getattr(op1, t.funcname)(op2, context=self.maxctx)
+
+        # _decimal's rounded result
+        rounded = P.Decimal(t.cresults[0])
 
         self.ulpdiff += 1
         return self.check_ulpdiff(exact, rounded)
 
-    def exp(self, result, operands):
-        if result.mpd.is_nan() or result.dec.is_nan():
-            return False
-        if context.f._allcr:
-            return False
-        return self.un_resolve_ulp(result, "exp", operands)
+    ############################ Correct rounding #############################
+    def resolve_underflow(self, t):
+        """In extremely rare cases where the infinite precision result is just
+           below etiny, cdecimal does not set Subnormal/Underflow. Example:
 
-    def log10(self, result, operands):
-        if result.mpd.is_nan() or result.dec.is_nan():
-            return False
-        if context.f._allcr:
-            return False
-        return self.un_resolve_ulp(result, "log10", operands)
+           setcontext(Context(prec=21, rounding=ROUND_UP, Emin=-55, Emax=85))
+           Decimal("1.00000000000000000000000000000000000000000000000"
+                   "0000000100000000000000000000000000000000000000000"
+                   "0000000000000025").ln()
+        """
+        if t.cresults != t.presults:
+            return False # Results must be identical.
+        if context.c.flags[C.Rounded] and \
+           context.c.flags[C.Inexact] and \
+           context.p.flags[P.Rounded] and \
+           context.p.flags[P.Inexact]:
+            return True # Subnormal/Underflow may be missing.
+        return False
 
-    def ln(self, result, operands):
-        if result.mpd.is_nan() or result.dec.is_nan():
-            return False
-        if context.f._allcr:
-            return False
-        return self.un_resolve_ulp(result, "ln", operands)
+    def exp(self, t):
+        """Resolve Underflow or ULP difference."""
+        if context.c._allcr:
+            return self.resolve_underflow(t)
+        return self.un_resolve_ulp(t)
 
-    def __pow__(self, result, operands):
-        if operands[2] is not None: # three argument __pow__
-            # issue7049: third arg must fit into precision
-            if (operands[0].mpd.is_zero() != operands[1].mpd.is_zero()):
-                if (result.mpd == 0 or result.mpd == 1) and result.dec.is_nan():
-                    if (not context.f.flags[cdecimal.InvalidOperation]) and \
-                       context.d.flags[decimal.InvalidOperation]:
-                        self.powmod_zeros += 1
-                        return True
-            # issue7049: ideal exponent
-            if decimal.Decimal(str(result.mpd)) == result.dec:
-                return True
-        elif result.mpd.is_nan() or result.dec.is_nan():
-            return False
-        elif context.f.flags[cdecimal.Rounded] and \
-             context.f.flags[cdecimal.Inexact] and \
-             context.d.flags[decimal.Rounded] and \
-             context.d.flags[decimal.Inexact]:
-            # decimal.py: correctly-rounded pow()
-            return self.bin_resolve_ulp(result, "__pow__", operands)
+    def log10(self, t):
+        """Resolve Underflow or ULP difference."""
+        if context.c._allcr:
+            return self.resolve_underflow(t)
+        return self.un_resolve_ulp(t)
+
+    def ln(self, t):
+        """Resolve Underflow or ULP difference."""
+        if context.c._allcr:
+            return self.resolve_underflow(t)
+        return self.un_resolve_ulp(t)
+
+    def __pow__(self, t):
+        """Always calls the resolve function. C.Decimal does not have correct
+           rounding for the power function."""
+        if context.c.flags[C.Rounded] and \
+           context.c.flags[C.Inexact] and \
+           context.p.flags[P.Rounded] and \
+           context.p.flags[P.Inexact]:
+            return self.bin_resolve_ulp(t)
         else:
             return False
-    power = __pow__
+    power = __rpow__ = __pow__
 
-    def __radd__(self, result, operands):
-        """decimal.py gives preference to the first nan"""
-        if operands[0].mpd.is_nan() and operands[1].mpd.is_nan() and \
-           result.mpd.is_nan() and result.dec.is_nan():
+    ############################## Technicalities #############################
+    def __float__(self, t):
+        """NaN comparison in the verify() function obviously gives an
+           incorrect answer:  nan == nan -> False"""
+        if t.cop[0].is_nan() and t.pop[0].is_nan():
+            return True
+        return False
+    __complex__ = __float__
+
+    def __radd__(self, t):
+        """decimal.py gives precedence to the first NaN; this is
+           not important, as __radd__ will not be called for
+           two decimal arguments."""
+        if t.rc.is_nan() and t.rp.is_nan():
             return True
         return False
     __rmul__ = __radd__
 
+    ################################ Various ##################################
+    def __round__(self, t):
+        """Exception: Decimal('1').__round__(-100000000000000000000000000)
+           Should it really be InvalidOperation?"""
+        if t.rc is None and t.rp.is_nan():
+            return True
+        return False
+
+    def __reduce__(self, t):
+        if t.cresults[0].replace('cdecimal', 'decimal') == t.presults[0]:
+            return True
+        return False
+
+    ############################# 3.2.x and less ##############################
+    if py_minor <= 2:
+        def fma(self, t):
+            """decimal.py: InvalidOperation instead of TypeError."""
+            if TypeError in t.cex:
+                return True
+            return False
+
+        def plus(self, t):
+            """special cases for zero/ROUND_FLOOR"""
+            if context.c.rounding == C.ROUND_FLOOR:
+                if t.cop[0].is_zero():
+                    return True
+            return False
+        minus = __neg__ = __pos__ = plus
+
+    ############################# 3.1.x and less ##############################
     if py_minor <= 1:
-        def rotate(self, result, operands):
-            """truncate excess digits before the operation"""
-            if len(operands[0].dec._int) > context.f.prec:
+        def __eq__(self, t):
+            """cdecimal raises for all sNaN comparisons"""
+            if t.cop[0].is_snan() or t.cop[1].is_snan():
+                return True
+            return False
+        __ne__ = __eq__
+
+        def __format__(self, t):
+            if t.rc.strip() == t.rp.strip():
+                return True
+            return False
+
+        def __int__(self, t):
+            if t.cop[0].is_nan() and ValueError in t.cex:
+                return True
+            return False
+        __trunc__ = __int__
+
+        def __radd__(self, t):
+            if t.rc is NotImplemented: # Fixed in 3.1.3
+                return True
+            if t.rc.is_nan() and t.rp.is_nan():
+                return True
+            return False
+        __rdivmod__ = __rfloordiv__ = __rmod__ = __radd__
+        __rmul__ = __rsub__ = __rtruediv__ = __radd__
+
+        def copy_decimal(self, t):
+            if TypeError in t.cex:
+                return True
+            return False
+
+        def compare_total(self, t):
+            if t.cop[0].is_nan() and t.cop[1].is_nan() and \
+               abs(t.rc) == 1 and abs(t.rp) == 1:
+                return True
+            return False
+        compare_total_mag = compare_total
+
+        def is_normal(self, t):
+            # Issue7099
+            if t.cop[0].is_normal():
+                return True
+            return False
+
+        def logb(self, t):
+            if context.c.flags[C.Rounded] and \
+               (not context.p.flags[P.Rounded]):
+                return True
+            return False
+
+        def rotate(self, t):
+            # truncate excess digits before the operation
+            if len(t.pop[0]._int) > context.p.prec:
                 return True
             return False
         shift = rotate
 
-        def compare_total_mag(self, result, operands):
-            if operands[0].mpd.is_nan() and operands[1].mpd.is_nan() and \
-               abs(result.mpd) == 1 and abs(result.dec) == 1:
-                self.total_mag_nan += 1
+        def logical_and(self, t):
+            if TypeError in t.cex:
                 return True
             return False
-        compare_total = compare_total_mag
-
-        def logb(self, result, operands):
-            if context.f.flags[cdecimal.Rounded] and \
-               (not context.d.flags[decimal.Rounded]):
-                self.logb_round_if_gt_prec += 1
-                return True
-            return False
+        logical_or = logical_xor = logical_invert = logical_and
 
 
-class dHandlerObj():
-    """For non-decimal return values:
+shandler = SkipHandler()
+def skip_error(t):
+    return getattr(shandler, t.funcname, shandler.default)(t)
 
-       Handle known disagreements between decimal.py and cdecimal.so."""
 
-    def __init__(self):
-        pass
+# ======================================================================
+#                      Handling verification errors
+# ======================================================================
 
-    def default(self, result, operands):
+class VerifyError(Exception):
+    """Verification failed."""
+    pass
+
+def function_as_string(t):
+    if t.contextfunc:
+        cargs = t.cop
+        pargs = t.pop
+        cfunc = "c_func: %s(" % t.funcname
+        pfunc = "p_func: %s(" % t.funcname
+    else:
+        cself, cargs = t.cop[0], t.cop[1:]
+        pself, pargs = t.pop[0], t.pop[1:]
+        cfunc = "c_func: %s.%s(" % (repr(cself), t.funcname)
+        pfunc = "p_func: %s.%s(" % (repr(pself), t.funcname)
+
+    err = cfunc
+    for arg in cargs:
+        err += "%s, " % repr(arg)
+    err = err.rstrip(", ")
+    err += ")\n"
+ 
+    err += pfunc
+    for arg in pargs:
+        err += "%s, " % repr(arg)
+    err = err.rstrip(", ")
+    err += ")"
+
+    return err
+
+def resolve_exceptions(t):
+    """Skip various issues in decimal.py"""
+    if py_minor >= 3 and not 'canonical' in t.funcname:
         return False
-    __ge__ =  __gt__ = __le__ = __lt__ =  __repr__ = __str__ = default
+    if TypeError in t.pex or AttributeError in t.pex:
+        return True
+    if TypeError in t.cex and t.rp is NotImplemented:
+        return True
+    return False
 
-    if py_minor >= 2:
-        __ne__ = __eq__ = default
-
-    if py_minor <= 1:
-        def __eq__(self, result, operands):
-            """cdecimal raises for all sNaN comparisons"""
-            if operands[0].mpd.is_snan() or operands[1].mpd.is_snan():
-                return True
-        __ne__ = __eq__
-
-    if py_minor <= 1:
-        # Fixed in release31-maint, but a lot of distributed
-        # versions do not have the fix yet.
-        def is_normal(self, result, operands):
-            # Issue7099
-            if operands[0].mpd.is_normal():
-                return True
-
-
-dhandler_cdec = dHandlerCdec()
-def cdec_known_disagreement(result, funcname, operands):
-    return getattr(dhandler_cdec, funcname, dhandler_cdec.default)(result, operands)
-
-dhandler_obj = dHandlerObj()
-def obj_known_disagreement(result, funcname, operands):
-    return getattr(dhandler_obj, funcname, dhandler_obj.default)(result, operands)
-
-
-def verify(result, funcname, operands):
-    """Verifies that after operation 'funcname' with operand(s) 'operands'
-       result[0] and result[1] as well as the context flags have the same
-       values."""
+def raise_error(t):
     global EXIT_STATUS
-    if result[0] != result[1] or not context.assert_eq_status():
-        if obj_known_disagreement(result, funcname, operands):
-            return # skip known disagreements
-        EXIT_STATUS = 1
-        raise CdecException(result, funcname, operands,
-                            str(context.f), str(context.d))
+
+    if resolve_exceptions(t):
+        return
+    if skip_error(t):
+        return
+    EXIT_STATUS = 1
+
+    err = "Error in %s:\n\n" % t.funcname
+    err += "input operands: %s\n\n" % (t.op,)
+    err += function_as_string(t)
+    err += "\n\nc_result: %s\np_result: %s\n\n" % (t.cresults, t.presults)
+    err += "c_exceptions: %s\np_exceptions: %s\n\n" % (t.cex, t.pex)
+    err += "%s\n\n" % str(t.context)
+
+    raise VerifyError(err)
 
 
-class cdec(object):
-    """Joins cdecimal.so and decimal.py for redundant calculations
-       with error checking."""
+# ======================================================================
+#                        Main testing functions
+#
+#  The procedure is always (t is the TestSet):
+#
+#   convert(t) -> Initialize the TestSet as necessary.
+#
+#                 Return 0 for early abortion (e.g. if a TypeError
+#                 occurs during conversion, there is nothing to test).
+#
+#                 Return 1 for continuing with the test case.
+#
+#   callfuncs(t) -> Call the relevant function for each implementation
+#                   and record the results in the TestSet.
+#
+#   verify(t) -> Verify the results. If verification fails, details
+#                are printed to stdout.
+# ======================================================================
 
-    __slots__ = ['mpd', 'dec']
+def convert(t, convstr=True):
+    """ t is the testset. At this stage the testset contains a tuple of
+        operands t.op of various types. For decimal methods the first
+        operand (self) is always converted to Decimal. If 'convstr' is
+        true, string operands are converted as well.
 
-    def __new__(cls, value=None):
-        self = object.__new__(cls)
-        self.mpd = None
-        self.dec = None
-        if value is not None:
-            context.clear_status()
-            if py_minor <= 1 and isinstance(value, float):
-                self.mpd = cdecimal.Decimal.from_float(value)
-                self.dec = decimal.Decimal.from_float(value)
+        Context operands are of type deccheck.Context, rounding mode
+        operands are given as a tuple (C.rounding, P.rounding).
+
+        Other types (float, int, etc.) are left unchanged.
+    """
+    for i, op in enumerate(t.op):
+
+        context.clear_status()
+
+        if not t.contextfunc and i == 0 or \
+           convstr and isinstance(op, str):
+            try:
+                c = C.Decimal(op)
+                cex = None
+            except (TypeError, ValueError, OverflowError) as e:
+                c = None
+                cex = e.__class__
+
+            try:
+                p = RestrictedDecimal(op)
+                pex = None
+            except (TypeError, ValueError, OverflowError) as e:
+                p = None
+                pex = e.__class__
+
+            t.cop.append(c)
+            t.cex.append(cex)
+            t.pop.append(p)
+            t.pex.append(pex)
+
+            if cex is pex:
+                if str(c) != str(p) or not context.assert_eq_status():
+                    raise_error(t)
+                if cex and pex:
+                    # nothing to test
+                    return 0
             else:
-                self.mpd = cdecimal.Decimal(value)
-                self.dec = decimal_new(value)
-            self.verify('__xnew__', (value,))
-        return self
-
-    def verify(self, funcname, operands):
-        """Verifies that after operation 'funcname' with operand(s) 'operands'
-           self.mpd and self.dec as well as the context flags have the same
-           values."""
-        global EXIT_STATUS
-        mpdstr = str(self.mpd)
-        decstr = str(self.dec)
-        mpdstr_eng = self.mpd.to_eng_string()
-        decstr_eng = self.dec.to_eng_string()
-        mpd_tuple = self.mpd.as_tuple()
-        dec_tuple = self.dec.as_tuple()
-        if mpd_tuple != dec_tuple: # XXX
-            if mpd_tuple[2] == 'F' and dec_tuple[2] == 'F' and \
-               mpd_tuple[1] == () and dec_tuple[1] == (0,):
-                return
-        if mpdstr != decstr or mpdstr_eng != decstr_eng or mpd_tuple != dec_tuple \
-           or not context.assert_eq_status():
-            if cdec_known_disagreement(self, funcname, operands):
-                return # skip known disagreements
-            EXIT_STATUS = 1
-            raise CdecException(self, funcname, operands,
-                                str(context.f), str(context.d))
-
-    def unaryfunc(self, funcname):
-        "unary function returning a cdec"
-        context.clear_status()
-        c = cdec()
-        c.mpd = getattr(self.mpd, funcname)()
-        c.dec = getattr(self.dec, funcname)()
-        c.verify(funcname, (self,))
-        return c
-
-    def unaryfunc_ctx(self, funcname):
-        "unary function returning a cdec, uses the context methods of decimal.py"
-        context.clear_status()
-        c = cdec()
-        c.mpd = getattr(self.mpd, funcname)()
-        c.dec = getattr(context.d, funcname)(self.dec)
-        c.verify(funcname, (self,))
-        return c
-
-    def obj_unaryfunc(self, funcname):
-        "unary function returning an object other than a cdec"
-        context.clear_status()
-        r_mpd = getattr(self.mpd, funcname)()
-        r_dec = getattr(self.dec, funcname)()
-        verify((r_mpd, r_dec), funcname, (self,))
-        return r_mpd
-
-    def binaryfunc(self, other, funcname):
-        "binary function returning a cdec"
-        context.clear_status()
-        c = cdec()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        c.mpd = getattr(self.mpd, funcname)(other_mpd)
-        c.dec = getattr(self.dec, funcname)(other_dec)
-        c.verify(funcname, (self, other))
-        return c
-
-    def binaryfunc_ctx(self, other, funcname):
-        "binary function returning a cdec, uses the context methods of decimal.py"
-        context.clear_status()
-        c = cdec()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        c.mpd = getattr(self.mpd, funcname)(other_mpd)
-        c.dec = getattr(context.d, funcname)(self.dec, other_dec)
-        c.verify(funcname, (self, other))
-        return c
-
-    def obj_binaryfunc(self, other, funcname):
-        "binary function returning an object other than a cdec"
-        context.clear_status()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        r_mpd = getattr(self.mpd, funcname)(other_mpd)
-        r_dec = getattr(self.dec, funcname)(other_dec)
-        verify((r_mpd, r_dec), funcname, (self, other))
-        return r_mpd
-
-    def ternaryfunc(self, other, third, funcname):
-        "ternary function returning a cdec"
-        context.clear_status()
-        c = cdec()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        third_mpd = third_dec = third
-        if isinstance(third, cdec):
-            third_mpd = third.mpd
-            third_dec = third.dec
-        c.mpd = getattr(self.mpd, funcname)(other_mpd, third_mpd)
-        c.dec = getattr(self.dec, funcname)(other_dec, third_dec)
-        c.verify(funcname, (self, other, third))
-        return c
-
-    def __abs__(self):
-        return self.unaryfunc('__abs__')
-
-    def __add__(self, other):
-        return self.binaryfunc(other, '__add__')
-
-    def __bool__(self):
-        return self.obj_unaryfunc('__bool__')
-
-    def __copy__(self):
-        return self.unaryfunc('__copy__')
-
-    def __deepcopy__(self, memo=None):
-        context.clear_status()
-        c = cdec()
-        c.mpd = self.mpd.__deepcopy__(memo)
-        c.dec = self.dec.__deepcopy__(memo)
-        c.verify('__deepcopy__', (self,))
-        return c
-
-    def __div__(self, other):
-        return self.binaryfunc(other, '__div__')
-
-    def __divmod__(self, other):
-        context.clear_status()
-        q = cdec()
-        r = cdec()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        q.mpd, r.mpd = self.mpd.__divmod__(other_mpd)
-        q.dec, r.dec = self.dec.__divmod__(other_dec, context.d)
-        q.verify('__divmod__', (self, other))
-        r.verify('__divmod__', (self, other))
-        return (q, r)
-
-    def __eq__(self, other):
-        return self.obj_binaryfunc(other, '__eq__')
-
-    def __float__(self):
-        if (self.mpd.is_nan() and self.dec.is_nan()):
-            return float("NaN")
-        try:
-            return self.obj_unaryfunc('__float__')
-        except ValueError:
-            return None
-
-    def __floordiv__(self, other):
-        return self.binaryfunc(other, '__floordiv__')
-
-    def __ge__(self, other):
-        return self.obj_binaryfunc(other, '__ge__')
-
-    def __gt__(self, other):
-        return self.obj_binaryfunc(other, '__gt__')
-
-    def __hash__(self):
-        if self.mpd.is_snan() or (py_minor <= 1 and self.mpd.is_nan()):
-            return None # for testing
-            raise ValueError('Cannot hash a NaN value.')
-        return self.obj_unaryfunc('__hash__')
-
-    def __int__(self):
-        # ValueError or OverflowError
-        if self.mpd.is_special():
-            return (None, None)
-        return self.obj_unaryfunc('__int__')
-
-    def __le__(self, other):
-        return self.obj_binaryfunc(other, '__le__')
-
-    def __long__(self):
-        # ValueError or OverflowError
-        if self.mpd.is_special():
-            return (None, None)
-        return self.obj_unaryfunc('__long__')
-
-    def __lt__(self, other):
-        return self.obj_binaryfunc(other, '__lt__')
-
-    def __mod__(self, other):
-        return self.binaryfunc(other, '__mod__')
-
-    def __mul__(self, other):
-        return self.binaryfunc(other, '__mul__')
-
-    def __ne__(self, other):
-        return self.obj_binaryfunc(other, '__ne__')
-
-    def __neg__(self):
-        return self.unaryfunc('__neg__')
-
-    def __nonzero__(self):
-        return self.obj_unaryfunc('__nonzero__')
-
-    def __pos__(self):
-        return self.unaryfunc('__pos__')
-
-    def __pow__(self, other, mod=None):
-        return self.ternaryfunc(other, mod, '__pow__')
-
-    def __radd__(self, other):
-        return self.binaryfunc(other, '__radd__')
-
-    def __rdiv__(self, other):
-        return self.binaryfunc(other, '__rdiv__')
-
-    def __rdivmod__(self, other):
-        context.clear_status()
-        q = cdec()
-        r = cdec()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        q.mpd, r.mpd = self.mpd.__rdivmod__(other_mpd)
-        q.dec, r.dec = self.dec.__rdivmod__(other_dec, context.d)
-        q.verify('__rdivmod__', (self, other))
-        r.verify('__rdivmod__', (self, other))
-        return (q, r)
-
-    # __reduce__
-
-    def __repr__(self):
-        self.obj_unaryfunc('__repr__')
-        return "cdec('" + str(self.mpd) + "')"
-
-    def __rfloordiv__(self, other):
-        return self.binaryfunc(other, '__rfloordiv__')
-
-    def __rmod__(self, other):
-        return self.binaryfunc(other, '__rmod__')
-
-    def __rmul__(self, other):
-        return self.binaryfunc(other, '__rmul__')
-
-    def __rsub__(self, other):
-        return self.binaryfunc(other, '__rsub__')
-
-    def __rtruediv__(self, other):
-        return self.binaryfunc(other, '__rtruediv__')
-
-    def __rpow__(self, other):
-        return other.__pow__(self)
-
-    def __str__(self):
-        self.obj_unaryfunc('__str__')
-        return str(self.mpd)
-
-    def __sub__(self, other):
-        return self.binaryfunc(other, '__sub__')
-
-    def __truediv__(self, other):
-        return self.binaryfunc(other, '__truediv__')
-
-    def __trunc__(self):
-        # ValueError or OverflowError
-        if self.mpd.is_special():
-            return (None, None)
-        return self.obj_unaryfunc('__trunc__')
-
-    def _apply(self):
-        return self.unaryfunc('_apply')
-
-    def abs(self):
-        return self.unaryfunc_ctx('abs')
-
-    def add(self, other):
-        return self.binaryfunc_ctx(other, 'add')
-
-    def adjusted(self):
-        return self.obj_unaryfunc('adjusted')
-
-    def canonical(self):
-        return self.unaryfunc('canonical')
-
-    def compare(self, other):
-        return self.binaryfunc(other, 'compare')
-
-    def compare_signal(self, other):
-        return self.binaryfunc(other, 'compare_signal')
-
-    def compare_total(self, other):
-        return self.binaryfunc(other, 'compare_total')
-
-    def compare_total_mag(self, other):
-        return self.binaryfunc(other, 'compare_total_mag')
-
-    def copy_abs(self):
-        return self.unaryfunc('copy_abs')
-
-    def copy_negate(self):
-        return self.unaryfunc('copy_negate')
-
-    def copy_sign(self, other):
-        return self.binaryfunc(other, 'copy_sign')
-
-    def divide(self, other):
-        return self.binaryfunc_ctx(other, 'divide')
-
-    def divide_int(self, other):
-        return self.binaryfunc_ctx(other, 'divide_int')
-
-    def divmod(self, other):
-        context.clear_status()
-        q = cdec()
-        r = cdec()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        q.mpd, r.mpd = self.mpd.divmod(other_mpd)
-        q.dec, r.dec = context.d.divmod(self.dec, other_dec)
-        q.verify('divmod', (self, other))
-        r.verify('divmod', (self, other))
-        return (q, r)
-
-    def exp(self):
-        return self.unaryfunc('exp')
-
-    def fma(self, other, third):
-        return self.ternaryfunc(other, third, 'fma')
-
-    # imag
-    # invroot
-
-    def is_canonical(self):
-        return self.obj_unaryfunc('is_canonical')
-
-    def is_finite(self):
-        return self.obj_unaryfunc('is_finite')
-
-    def is_infinite(self):
-        return self.obj_unaryfunc('is_infinite')
-
-    def is_nan(self):
-        return self.obj_unaryfunc('is_nan')
-
-    def is_normal(self):
-        return self.obj_unaryfunc('is_normal')
-
-    def is_qnan(self):
-        return self.obj_unaryfunc('is_qnan')
-
-    def is_signed(self):
-        return self.obj_unaryfunc('is_signed')
-
-    def is_snan(self):
-        return self.obj_unaryfunc('is_snan')
-
-    def is_subnormal(self):
-        return self.obj_unaryfunc('is_subnormal')
-
-    def is_zero(self):
-        return self.obj_unaryfunc('is_zero')
-
-    def ln(self):
-        return self.unaryfunc('ln')
-
-    def log10(self):
-        return self.unaryfunc('log10')
-
-    def logb(self):
-        return self.unaryfunc('logb')
-
-    def logical_and(self, other):
-        return self.binaryfunc(other, 'logical_and')
-
-    def logical_invert(self):
-        return self.unaryfunc('logical_invert')
-
-    def logical_or(self, other):
-        return self.binaryfunc(other, 'logical_or')
-
-    def logical_xor(self, other):
-        return self.binaryfunc(other, 'logical_xor')
-
-    def max(self, other):
-        return self.binaryfunc(other, 'max')
-
-    def max_mag(self, other):
-        return self.binaryfunc(other, 'max_mag')
-
-    def min(self, other):
-        return self.binaryfunc(other, 'min_mag')
-
-    def min_mag(self, other):
-        return self.binaryfunc(other, 'min_mag')
-
-    def minus(self):
-        return self.unaryfunc_ctx('minus')
-
-    def multiply(self, other):
-        return self.binaryfunc_ctx(other, 'multiply')
-
-    def next_minus(self):
-        return self.unaryfunc('next_minus')
-
-    def next_plus(self):
-        return self.unaryfunc('next_plus')
-
-    def next_toward(self, other):
-        return self.binaryfunc(other, 'next_toward')
-
-    def normalize(self):
-        return self.unaryfunc('normalize')
-
-    def number_class(self):
-        return self.obj_unaryfunc('number_class')
-
-    def plus(self):
-        return self.unaryfunc_ctx('plus')
-
-    def power(self, other, third=None):
-        "ternary function returning a cdec, uses the context methods of decimal.py"
-        context.clear_status()
-        c = cdec()
-        other_mpd = other_dec = other
-        if isinstance(other, cdec):
-            other_mpd = other.mpd
-            other_dec = other.dec
-        third_mpd = third_dec = third
-        if isinstance(third, cdec):
-            third_mpd = third.mpd
-            third_dec = third.dec
-        c.mpd = pow(self.mpd, other_mpd, third_mpd)
-        c.dec = pow(self.dec, other_dec, third_dec)
-        c.verify('power', (self, other, third))
-        return c
-
-    # powmod: same as __pow__ or power with three arguments
-
-    def quantize(self, other):
-        return self.binaryfunc(other, 'quantize')
-
-    def radix(self):
-        return self.obj_unaryfunc('radix')
-
-    # real
-    # reduce: same as normalize
-
-    def remainder(self, other):
-        return self.binaryfunc_ctx(other, 'remainder')
-
-    def remainder_near(self, other):
-        return self.binaryfunc(other, 'remainder_near')
-
-    def rotate(self, other):
-        return self.binaryfunc(other, 'rotate')
-
-    def same_quantum(self, other):
-        return self.obj_binaryfunc(other, 'same_quantum')
-
-    def scaleb(self, other):
-        return self.binaryfunc(other, 'scaleb')
-
-    def shift(self, other):
-        return self.binaryfunc(other, 'shift')
-
-    # sign
-
-    def sqrt(self):
-        return self.unaryfunc('sqrt')
-
-    def subtract(self, other):
-        return self.binaryfunc_ctx(other, 'subtract')
-
-    def to_eng_string(self):
-        return self.obj_unaryfunc('to_eng_string')
-
-    def to_integral(self):
-        return self.unaryfunc('to_integral')
-
-    def to_integral_exact(self):
-        return self.unaryfunc('to_integral_exact')
-
-    def to_integral_value(self):
-        return self.unaryfunc('to_integral_value')
-
-    def to_sci_string(self):
-        context.clear_status()
-        r_mpd = self.mpd.to_sci_string()
-        r_dec = context.d.to_sci_string(self.dec)
-        verify((r_mpd, r_dec), 'to_sci_string', (self,))
-        return r_mpd
-
+                raise_error(t)
+
+        elif isinstance(op, Context):
+            t.context = op
+            t.cop.append(op.c)
+            t.pop.append(op.p)
+
+        elif op in RoundModes:
+            t.cop.append(op[0])
+            t.pop.append(op[1])
+
+        else:
+            t.cop.append(op)
+            t.pop.append(op)
+
+    return 1
+
+def callfuncs(t):
+    """ t is the testset. At this stage the testset contains operand lists
+        t.cop and t.pop for the C and Python versions of decimal.
+        For Decimal methods, the first operands are of type C.Decimal and
+        P.Decimal respectively. The remaining operands can have various types.
+        For Context methods, all operands can have any type.
+
+        t.rc and t.rp are the results of the operation.
+    """
+    context.clear_status()
+
+    try:
+        if t.contextfunc:
+            cargs = t.cop
+            t.rc = getattr(context.c, t.funcname)(*cargs)
+        else:
+            cself = t.cop[0]
+            cargs = t.cop[1:]
+            t.rc = getattr(cself, t.funcname)(*cargs)
+        t.cex.append(None)
+    except (TypeError, ValueError, OverflowError, MemoryError,
+            AttributeError) as e:
+        t.rc = None
+        t.cex.append(e.__class__)
+
+    try:
+        if t.contextfunc:
+            pargs = t.pop
+            t.rp = getattr(context.p, t.funcname)(*pargs)
+        else:
+            pself = t.pop[0]
+            pargs = t.pop[1:]
+            t.rp = getattr(pself, t.funcname)(*pargs)
+        t.pex.append(None)
+    except (TypeError, ValueError, OverflowError, MemoryError,
+            AttributeError) as e:
+        t.rp = None
+        t.pex.append(e.__class__)
+
+def verify(t, stat):
+    """ t is the testset. At this stage the testset contains the following
+        tuples:
+
+            t.op: original operands
+            t.cop: C.Decimal operands (see convert for details)
+            t.pop: P.Decimal operands (see convert for details)
+            t.rc: C result
+            t.rp: Python result
+
+        t.rc and t.rp can have various types.
+    """
+    t.cresults.append(str(t.rc))
+    t.presults.append(str(t.rp))
+    if isinstance(t.rc, C.Decimal) and isinstance(t.rp, P.Decimal):
+        # General case: both results are Decimals.
+        t.cresults.append(t.rc.to_eng_string())
+        t.cresults.append(t.rc.as_tuple())
+        t.cresults.append(str(t.rc.imag))
+        t.cresults.append(str(t.rc.real))
+        t.presults.append(t.rp.to_eng_string())
+        t.presults.append(t.rp.as_tuple())
+        t.presults.append(str(t.rp.imag))
+        t.presults.append(str(t.rp.real))
+
+        nc = t.rc.number_class().lstrip('+-s')
+        stat[nc] += 1
+    else:
+        # Results from e.g. __divmod__ can only be compared as strings.
+        if not isinstance(t.rc, tuple) and not isinstance(t.rp, tuple):
+            if t.rc != t.rp:
+                raise_error(t)
+        stat[type(t.rc).__name__] += 1
+
+    # The return value lists must be equal.
+    if t.cresults != t.presults:
+        raise_error(t)
+    # The Python exception lists (TypeError, etc.) must be equal.
+    if t.cex != t.pex:
+        raise_error(t)
+    # The context flags must be equal.
+    if not t.context.assert_eq_status():
+        raise_error(t)
+
+
+# ======================================================================
+#                           Main test loops
+#
+#  test_method(method, testspecs, testfunc) ->
+#
+#     Loop through various context settings. The degree of
+#     thoroughness is determined by 'testspec'. For each
+#     setting, call 'testfunc'. Generally, 'testfunc' itself
+#     a loop, iterating through many test cases generated
+#     by the functions in randdec.py.
+#
+#  test_n-ary(method, prec, exp_range, restricted_range, itr, stat) ->
+#
+#     'test_unary', 'test_binary' and 'test_ternary' are the
+#     main test functions passed to 'test_method'. They deal
+#     with the regular cases. The thoroughness of testing is
+#     determined by 'itr'.
+#
+#     'prec', 'exp_range' and 'restricted_range' are passed
+#     to the test-generating functions and limit the generated
+#     values. In some cases, for reasonable run times a
+#     maximum exponent of 9999 is required.
+#
+#     The 'stat' parameter is passed down to the 'verify'
+#     function, which records statistics for the result values.
+# ======================================================================
 
 def log(fmt, args=None):
     if args:
@@ -1040,10 +926,13 @@ def log(fmt, args=None):
     sys.stdout.flush()
 
 def test_method(method, testspecs, testfunc):
+    """Iterate a test function through many context settings."""
     log("testing %s ...", method)
+    stat = defaultdict(int)
     for spec in testspecs:
         if 'samples' in spec:
-            spec['prec'] = sorted(random.sample(range(1, 101), spec['samples']))
+            spec['prec'] = sorted(random.sample(range(1, 101),
+                                  spec['samples']))
         for prec in spec['prec']:
             context.prec = prec
             for expts in spec['expts']:
@@ -1057,358 +946,152 @@ def test_method(method, testspecs, testfunc):
                 log("    prec: %d  emin: %d  emax: %d",
                     (context.prec, context.Emin, context.Emax))
                 restr_range = 9999 if context.Emax > 9999 else context.Emax+99
-                for rounding in sorted(decround):
+                for rounding in sorted(RoundMap):
                     context.rounding = rounding
                     context.capitals = random.randrange(2)
-                    if spec['clamp'] == 2:
+                    if spec['clamp'] == 'rand':
                         context.clamp = random.randrange(2)
                     else:
                         context.clamp = spec['clamp']
-                    exprange = context.f.Emax
-                    testfunc(method, prec, exprange, restr_range, spec['iter'])
+                    exprange = context.c.Emax
+                    testfunc(method, prec, exprange, restr_range,
+                             spec['iter'], stat)
+    log("    result types: %s" % sorted([t for t in stat.items()]))
 
-def test_unary(method, prec, exprange, restr_range, iter):
-    if method in ['__int__', '__long__', '__trunc__', 'to_integral',
-                  'to_integral_value', 'to_integral_value']:
-        exprange = restr_range
-    for a in un_close_to_pow10(prec, exprange, iter):
+def test_unary(method, prec, exp_range, restricted_range, itr, stat):
+    """Iterate a unary function through many test cases."""
+    if method in UnaryRestricted:
+        exp_range = restricted_range
+    for op in all_unary(prec, exp_range, itr):
+        t = TestSet(method, op)
         try:
-            x = cdec(a)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-    for a in un_close_numbers(prec, exprange, -exprange, iter):
-        try:
-            x = cdec(a)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-    for a in un_incr_digits_tuple(prec, exprange, iter):
-        try:
-            x = cdec(a)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-    for a in un_randfloat():
-        try:
-            x = cdec(a)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-    for i in range(1000):
-        try:
-            s = randdec(prec, exprange)
-            x = cdec(s)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-        except OverflowError:
-            pass
-        try:
-            s = randtuple(prec, exprange)
-            x = cdec(s)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-        except OverflowError:
-            pass
-
-def test_un_logical(method, prec, exprange, restr_range, iter):
-    for a in logical_un_incr_digits(prec, iter):
-        try:
-            x = cdec(a)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-    for i in range(1000):
-        try:
-            s = randdec(prec, restr_range)
-            x = cdec(s)
-            getattr(x, method)()
-        except CdecException as err:
-            log(err)
-        except OverflowError:
-            pass
-
-def test_binary(method, prec, exprange, restr_range, iter):
-    if method in ['__pow__', '__rpow__', 'power']:
-        exprange = restr_range
-    for a, b in bin_close_to_pow10(prec, exprange, iter):
-        try:
-            x = cdec(a)
-            y = cdec(b)
-            getattr(x, method)(y)
-        except CdecException as err:
-            log(err)
-    for a, b in bin_close_numbers(prec, exprange, -exprange, iter):
-        try:
-            x = cdec(a)
-            y = cdec(b)
-            getattr(x, method)(y)
-        except CdecException as err:
-            log(err)
-    for a, b in bin_incr_digits(prec, exprange, iter):
-        try:
-            x = cdec(a)
-            y = cdec(b)
-            getattr(x, method)(y)
-        except CdecException as err:
-            log(err)
-    for a, b in bin_randfloat():
-        try:
-            x = cdec(a)
-            y = cdec(b)
-            getattr(x, method)(y)
-        except CdecException as err:
-            log(err)
-    for i in range(1000):
-        s1 = randdec(prec, exprange)
-        s2 = randdec(prec, exprange)
-        try:
-            x = cdec(s1)
-            y = cdec(s2)
-            getattr(x, method)(y)
-        except CdecException as err:
+            if not convert(t):
+                continue
+            callfuncs(t)
+            verify(t, stat)
+        except VerifyError as err:
             log(err)
 
-def test_bin_logical(method, prec, exprange, restr_range, iter):
-    for a, b in logical_bin_incr_digits(prec, iter):
+def test_binary(method, prec, exp_range, restricted_range, itr, stat):
+    """Iterate a binary function through many test cases."""
+    if method in BinaryRestricted:
+        exp_range = restricted_range
+    for op in all_binary(prec, exp_range, itr):
+        t = TestSet(method, op)
         try:
-            x = cdec(a)
-            y = cdec(b)
-            getattr(x, method)(y)
-        except CdecException as err:
-            log(err)
-    for i in range(1000):
-        s1 = randdec(prec, restr_range)
-        s2 = randdec(prec, restr_range)
-        try:
-            x = cdec(s1)
-            y = cdec(s2)
-            getattr(x, method)(y)
-        except CdecException as err:
+            if not convert(t):
+                continue
+            callfuncs(t)
+            verify(t, stat)
+        except VerifyError as err:
             log(err)
 
-def test_ternary(method, prec, exprange, restr_range, iter):
-    if method in ['__pow__', 'power']:
-        exprange = restr_range
-    for a, b, c in tern_close_numbers(prec, exprange, -exprange, iter):
+def test_ternary(method, prec, exp_range, restricted_range, itr, stat):
+    """Iterate a ternary function through many test cases."""
+    for op in all_ternary(prec, exp_range, itr):
+        t = TestSet(method, op)
         try:
-            x = cdec(a)
-            y = cdec(b)
-            z = cdec(c)
-            getattr(x, method)(y, z)
-        except CdecException as err:
-            log(err)
-    for a, b, c in tern_incr_digits(prec, exprange, iter):
-        try:
-            x = cdec(a)
-            y = cdec(b)
-            z = cdec(c)
-            getattr(x, method)(y, z)
-        except CdecException as err:
-            log(err)
-    for a, b, c in tern_randfloat():
-        try:
-            x = cdec(a)
-            y = cdec(b)
-            z = cdec(c)
-            getattr(x, method)(y, z)
-        except CdecException as err:
-            log(err)
-    for i in range(1000):
-        s1 = randdec(prec, 2*exprange)
-        s2 = randdec(prec, 2*exprange)
-        s3 = randdec(prec, 2*exprange)
-        try:
-            x = cdec(s1)
-            y = cdec(s2)
-            z = cdec(s3)
-            getattr(x, method)(y, z)
-        except CdecException as err:
+            if not convert(t):
+                continue
+            callfuncs(t)
+            verify(t, stat)
+        except VerifyError as err:
             log(err)
 
-def test_format(method, prec, exprange, restr_range, iter):
-    for a in un_incr_digits_tuple(prec, restr_range, iter):
-        context.clear_status()
-        try:
-            fmt = rand_format(chr(random.randrange(32, 128)))
-            x = format(context.f.create_decimal(a), fmt)
-            y = format(context.d.create_decimal(a), fmt)
-        except Exception as err:
-            print(err, fmt)
-            continue
-        if x != y:
-            print(context.f)
-            print(context.d)
-            print("\n%s  %s" % (a, fmt))
-            print("%s  %s\n" % (x, y))
-    for i in range(1000):
-        context.clear_status()
-        try:
-            a = randdec(99, 9999)
-            fmt = rand_format(chr(random.randrange(32, 128)))
-            x = format(context.f.create_decimal(a), fmt)
-            y = format(context.d.create_decimal(a), fmt)
-        except Exception as err:
-            print(err, fmt)
-            continue
-        if x != y:
-            print(context.f)
-            print(context.d)
-            print("\n%s  %s" % (a, fmt))
-            print("%s  %s\n" % (x, y))
-
-def test_locale(method, prec, exprange, restr_range, iter):
-    for a in un_incr_digits_tuple(prec, restr_range, iter):
-        context.clear_status()
-        try:
-            fmt = rand_locale()
-            x = format(context.f.create_decimal(a), fmt)
-            y = format(context.d.create_decimal(a), fmt)
-        except Exception as err:
-            print(err, fmt)
-            continue
-        if x != y:
-            print(context.f)
-            print(context.d)
-            print(locale.setlocale(locale.LC_NUMERIC))
-            print("%s  %s" % (a, fmt))
-            print(list(array.array('u', x)))
-            print(list(array.array('u', y)))
-    for i in range(1000):
-        context.clear_status()
-        try:
-            a = randdec(99, 9999)
-            fmt = rand_locale()
-            x = format(context.f.create_decimal(a), fmt)
-            y = format(context.d.create_decimal(a), fmt)
-        except Exception as err:
-            print(err, fmt)
-            continue
-        if x != y:
-            print(context.f)
-            print(context.d)
-            print(locale.setlocale(locale.LC_NUMERIC))
-            print("%s  %s" % (a, fmt))
-            print(list(array.array('u', x)))
-            print(list(array.array('u', y)))
-
-def test_round(method, prec, exprange, restr_range, iter):
-    for a in un_incr_digits_tuple(prec, restr_range, 1):
-        context.clear_status()
-        try:
-            n = random.randrange(10)
-            x = (context.f.create_decimal(a)).__round__(n)
-            y = (context.d.create_decimal(a)).__round__(n)
-        except Exception as err:
-            print(err)
-            continue
-        if str(x) != str(y):
-            print(context.f)
-            print(context.d)
-            print("\n%s  %s" % (a, n))
-            print("%s  %s\n" % (x, y))
-            exit(1)
-    for i in range(1000):
-        context.clear_status()
-        try:
-            a = randdec(99, 9999)
-            n = random.randrange(10)
-            x = context.f.create_decimal(a).__round__(n)
-            y = context.d.create_decimal(a).__round__(n)
-        except Exception as err:
-            print(err)
-            continue
-        if str(x) != str(y):
-            print(context.f)
-            print(context.d)
-            print("\n%s  %s" % (a, n))
-            print("%s  %s\n" % (x, y))
-
-def test_from_float(method, prec, exprange, restr_range, iter):
-    for rounding in sorted(decround):
-        context.rounding = rounding
-        exprange = 384
-        for i in range(1000):
-            intpart = str(random.randrange(100000000000000000000000000000000000000))
-            fracpart = str(random.randrange(100000000000000000000000000000000000000))
-            exp = str(random.randrange(-384, 384))
-            fstring = intpart + '.' + fracpart + 'e' + exp
-            f = float(fstring)
+def test_format(method, prec, exp_range, restricted_range, itr, stat):
+    """Iterate the __format__ method through many test cases."""
+    for op in all_unary(prec, 9999, itr):
+        fmt1 = rand_format(chr(random.randrange(32, 128)))
+        fmt2 = rand_locale()
+        for fmt in (fmt1, fmt2):
+            fmtop = (op[0], fmt)
+            t = TestSet(method, fmtop)
             try:
-                c = cdec(f)
-            except CdecException as err:
+                if not convert(t, convstr=False):
+                    continue
+                callfuncs(t)
+                verify(t, stat)
+            except VerifyError as err:
                 log(err)
 
-def assert_eq_status(c, d):
-    """assert equality of cdecimal and decimal status"""
-    for signal in c.flags:
-        if signal == cdecimal.FloatOperation:
-            continue
-        if c.flags[signal] == (not d.flags[deccond[signal]]):
-            return False
-    return True
-
-def test_quantize_api(method, prec, exprange, restr_range, iter):
-    for a in un_incr_digits(prec, restr_range, 1):
-        emax = random.randrange(exprange)
-        emin = random.randrange(-exprange, 0)
-        clamp = random.randrange(2)
-        exp = randdec(2*prec, exprange)
-        for rounding in sorted(decround):
-            try:
-                c = cdecimal.Context(prec=prec, Emax=emax, Emin=emin, clamp=clamp, traps=[])
-                d = decimal.Context(prec=prec, Emax=emax, Emin=emin, traps=[])
-                attr = 'clamp' if py_minor >= 2 else "_clamp"
-                setattr(d, attr, clamp)
-
-                x = cdecimal.Decimal(a)
-                y = cdecimal.Decimal(exp)
-                cresult = x.quantize(y, rounding, c)
-
-                u = decimal.Decimal(a)
-                v = decimal.Decimal(exp)
-                dresult = u.quantize(v, decround[rounding], d)
-            except Exception as err:
-                print(err)
+def test_round(method, prec, exprange, restricted_range, itr, stat):
+    """Iterate the __round__ method through many test cases."""
+    for op in all_unary(prec, 9999, itr):
+        n = random.randrange(10)
+        roundop = (op[0], n)
+        t = TestSet(method, roundop)
+        try:
+            if not convert(t):
                 continue
-            if str(cresult) != str(dresult) or \
-               not assert_eq_status(c, d):
-                print("%s\n%s\n" % (c, d))
-                print("x: %s\ny: %s\nu: %s\nv: %s\n" % (x, y, u, v))
-                print("a: %s  exp: %s\n" % (a, exp))
-                print("cresult: %s\ndresult: %s\n" % (cresult, dresult))
-    for i in range(1000):
-        a = randdec(prec, 9999)
-        prec = random.randrange(1, 50)
-        emax = random.randrange(exprange)
-        emin = random.randrange(-exprange, 0)
-        clamp = random.randrange(2)
-        exp = randdec(2*prec, exprange)
-        for rounding in sorted(decround):
+            callfuncs(t)
+            verify(t, stat)
+        except VerifyError as err:
+            log(err)
+
+def test_from_float(method, prec, exprange, restricted_range, itr, stat):
+    """Iterate the __float__ method through many test cases."""
+    for rounding in sorted(RoundMap):
+        context.rounding = rounding
+        for i in range(1000):
+            f = randfloat()
+            op = (f,) if method.startswith("context.") else ("sNaN", f)
+            t = TestSet(method, op)
             try:
-                c = cdecimal.Context(prec=prec, Emax=emax, Emin=emin, clamp=clamp, traps=[])
-                d = decimal.Context(prec=prec, Emax=emax, Emin=emin, traps=[])
-                attr = 'clamp' if py_minor >= 2 else "_clamp"
-                setattr(d, attr, clamp)
+                if not convert(t):
+                    continue
+                callfuncs(t)
+                verify(t, stat)
+            except VerifyError as err:
+                log(err)
 
-                x = cdecimal.Decimal(a)
-                y = cdecimal.Decimal(exp)
-                cresult = x.quantize(context=c, exp=y, rounding=rounding)
+def randcontext(exprange):
+    c = Context(C.Context(), P.Context())
+    c.Emax = random.randrange(1, exprange+1)
+    c.Emin = random.randrange(-exprange, 0)
+    maxprec = 100 if c.Emax >= 100 else c.Emax
+    c.prec = random.randrange(1, maxprec+1)
+    c.clamp = random.randrange(2)
+    c.clear_traps()
+    return c
 
-                u = decimal.Decimal(a)
-                v = decimal.Decimal(exp)
-                dresult = u.quantize(context=d, exp=v, rounding=decround[rounding])
-            except Exception as err:
-                print(err)
-                continue
-            if str(cresult) != str(dresult) or \
-               not assert_eq_status(c, d):
-                print("%s\n%s\n" % (c, d))
-                print("x: %s\ny: %s\nu: %s\nv: %s\n" % (x, y, u, v))
-                print("a: %s  exp: %s\n" % (a, exp))
-                print("cresult: %s\ndresult: %s\n" % (cresult, dresult))
+def test_quantize_api(method, prec, exprange, restricted_range, itr, stat):
+    """Iterate the 'quantize' method through many test cases, using
+       the optional arguments."""
+    for op in all_binary(prec, restricted_range, itr):
+        for rounding in RoundModes:
+            c = randcontext(exprange)
+            quantizeop = (op[0], op[1], rounding, c)
+            t = TestSet(method, quantizeop)
+            try:
+                if not convert(t):
+                    continue
+                callfuncs(t)
+                verify(t, stat)
+            except VerifyError as err:
+                log(err)
+
+
+def check_untested(funcdict, c_cls, p_cls):
+    """Determine untested, C-only and Python-only attributes.
+       Uncomment print lines for debugging."""
+    c_attr = set(dir(c_cls))
+    p_attr = set(dir(p_cls))
+    intersect = c_attr & p_attr
+
+    funcdict['c_only'] = tuple(sorted(c_attr-intersect))
+    funcdict['p_only'] = tuple(sorted(p_attr-intersect))
+
+    tested = set()
+    for lst in funcdict.values():
+        for v in lst:
+            v = v.replace("context.", "") if c_cls == C.Context else v
+            tested.add(v)
+
+    funcdict['untested'] = tuple(sorted(intersect-tested))
+
+    #for key in ('untested', 'c_only', 'p_only'):
+    #    s = 'Context' if c_cls == C.Context else 'Decimal'
+    #    print("\n%s %s:\n%s" % (s, key, funcdict[key]))
 
 
 if __name__ == '__main__':
@@ -1418,120 +1101,98 @@ if __name__ == '__main__':
     randseed = int(time.time())
     random.seed(randseed)
 
-    base_expts = [(cdecimal.MIN_EMIN, cdecimal.MAX_EMAX)]
-    if cdecimal.MAX_EMAX == 999999999999999999:
+    # Set up the testspecs list. A testspec is simply a dictionary
+    # that determines the amount of different contexts that 'test_method'
+    # will generate.
+    base_expts = [(C.MIN_EMIN, C.MAX_EMAX)]
+    if C.MAX_EMAX == 999999999999999999:
         base_expts.append((-999999999, 999999999))
 
+    # Basic contexts.
     base = {
-        'name': 'base',
         'expts': base_expts,
         'prec': [],
-        'clamp': 2,
+        'clamp': 'rand',
         'iter': None,
         'samples': None,
     }
+    # Contexts with small values for prec, emin, emax.
     small = {
-        'name': 'small',
         'prec': [1, 2, 3, 4, 5],
-        'expts': [(-1,1), (-2,2), (-3,3), (-4,4), (-5,5)],
-        'clamp': 2,
+        'expts': [(-1, 1), (-2, 2), (-3, 3), (-4, 4), (-5, 5)],
+        'clamp': 'rand',
         'iter': None
     }
+    # IEEE interchange format.
     ieee = [
-        {'name': 'decimal32', 'prec': [7], 'expts': [(-95, 96)], 'clamp': 1, 'iter': None},
-        {'name': 'decimal64', 'prec': [16], 'expts': [(-383, 384)], 'clamp': 1, 'iter': None},
-        {'name': 'decimal128', 'prec': [34], 'expts': [(-6143, 6144)], 'clamp': 1, 'iter': None}
+        # DECIMAL32
+        {'prec': [7], 'expts': [(-95, 96)], 'clamp': 1, 'iter': None},
+        # DECIMAL64
+        {'prec': [16], 'expts': [(-383, 384)], 'clamp': 1, 'iter': None},
+        # DECIMAL128
+        {'prec': [34], 'expts': [(-6143, 6144)], 'clamp': 1, 'iter': None}
     ]
 
     if '--medium' in sys.argv:
         base['expts'].append(('rand', 'rand'))
-        base['samples'] = None
+        # 5 random precisions
+        base['samples'] = 5
         testspecs = [small] + ieee + [base]
     if '--long' in sys.argv:
         base['expts'].append(('rand', 'rand'))
-        base['samples'] = 5
+        # 10 random precisions
+        base['samples'] = 10
         testspecs = [small] + ieee + [base]
     elif '--all' in sys.argv:
         base['expts'].append(('rand', 'rand'))
+        # All precisions in [1, 100]
         base['samples'] = 100
         testspecs = [small] + ieee + [base]
     else: # --short
         rand_ieee = random.choice(ieee)
         base['iter'] = small['iter'] = rand_ieee['iter'] = 1
+        # 1 random precision and exponent pair
         base['samples'] = 1
         base['expts'] = [random.choice(base_expts)]
+        # 1 random precision and exponent pair
         prec = random.randrange(1, 6)
         small['prec'] = [prec]
         small['expts'] = [(-prec, prec)]
         testspecs = [small, rand_ieee, base]
 
-
-    all_decimal_methods = set(dir(cdecimal.Decimal) + dir(decimal.Decimal))
-    all_cdec_methods = [m for m in dir(cdec) if m in all_decimal_methods]
-    untested_methods = [m for m in all_decimal_methods if not (m in all_cdec_methods)]
-
-    unary_methods = []
-    binary_methods = []
-    ternary_methods = []
-    for m in all_cdec_methods:
-        try:
-            l = len(inspect.getargspec(getattr(cdec, m))[0])
-        except TypeError:
-            continue
-        if   l == 1:
-            unary_methods.append(m)
-        elif l == 2:
-            binary_methods.append(m)
-        elif l == 3:
-            ternary_methods.append(m)
-        else:
-            raise ValueError((m, l))
-
-    unary_methods.append('__deepcopy__')
-    binary_methods.remove('__deepcopy__')
-    binary_methods.remove('__new__')
-    binary_methods.append('power')
-    untested_methods.remove('from_float')
-    if py_minor < 6:
-        unary_methods.remove('__trunc__')
-        for elem in ['__ge__', '__gt__', '__le__', '__lt__']:
-            binary_methods.remove(elem)
-
-    untested_methods.sort()
-    unary_methods.sort()
-    binary_methods.sort()
-    ternary_methods.sort()
+    check_untested(Functions, C.Decimal, P.Decimal)
+    check_untested(ContextFunctions, C.Context, P.Context)
 
 
-    log("\nRandom seed: %d\n\n", randseed)
-    log("Skipping tests: \n\n%s\n", untested_methods)
+    log("\n\nRandom seed: %d\n\n", randseed)
 
-
-    for method in unary_methods:
+    # Decimal methods:
+    for method in Functions['unary'] + Functions['unary_ctx'] + \
+                  Functions['unary_rnd_ctx']:
         test_method(method, testspecs, test_unary)
 
-    for method in binary_methods:
+    for method in Functions['binary'] + Functions['binary_ctx']:
         test_method(method, testspecs, test_binary)
 
-    for method in ternary_methods:
+    for method in Functions['ternary_ctx']:
         test_method(method, testspecs, test_ternary)
 
-    test_method('logical_invert', testspecs, test_un_logical)
+    test_method('__format__', testspecs, test_format)
+    test_method('__round__', testspecs, test_round)
+    test_method('from_float', testspecs, test_from_float)
+    test_method('quantize', testspecs, test_quantize_api)
 
-    for method in ['logical_and', 'logical_or', 'logical_xor']:
-        test_method(method, testspecs, test_bin_logical)
+    # Context methods:
+    for method in ContextFunctions['unary']:
+        test_method(method, testspecs, test_unary)
 
-    test_method('quantize_api', testspecs, test_quantize_api)
+    for method in ContextFunctions['binary']:
+        test_method(method, testspecs, test_binary)
 
+    for method in ContextFunctions['ternary']:
+        test_method(method, testspecs, test_ternary)
 
-    if py_minor >= 2:
-        # Some tests will fail with 3.1, since alignment has been changed
-        # in decimal.py 3.2.
-        from genlocale import *
-        test_method('format', testspecs, test_format)
-        test_method('locale', testspecs, test_locale)
-        test_method('round', testspecs, test_round)
-        test_method('from_float', testspecs, test_from_float)
+    test_method('context.create_decimal_from_float', testspecs, test_from_float)
 
 
     sys.exit(EXIT_STATUS)
