@@ -3,11 +3,41 @@
 Changelog
 =========
 
+Version 2.4.0
+-------------
+
+    **features**
+
+    1) Faster integer to string conversion.
+
+    2) mpd_qln(), mpd_qlog10() and mpd_pow() are now thread-safe.
+
+    3) All functions that take or return C integers are now available in
+       both the 64-bit and the 32-bit builds.
+
+    4) Support for cross-compiling.
+
+    5) Scripts for Visual Studio builds.
+
+    **code improvements**
+
+    1) This version is exactly the same as the version shipped with Python-3.3+.
+       Large portions of the code have been refactored in order to facilitate
+       proofs.  Many ACL2 proofs have been added.
+
+    **removed**
+
+    1) The Python module has been removed from mpdecimal, since both libmpdec
+       and cdecimal are included in Python-3.3+.
+
+    2) The large test suite against decNumber as well as the multi-precision
+       tests against gmp have been removed, but will be available in a separate
+       package.  Naturally these tests are still run as part of the release
+       process.
+
+
 Version 2.3
 -----------
-
-libmpdec
-~~~~~~~~
 
     **features**
 
@@ -22,38 +52,8 @@ libmpdec
        the result.
 
 
-cdecimal
-~~~~~~~~
-
-    **features**
-
-    1) 100% code coverage, including all failures of Python API functions.
-
-    2) Speed up int/Decimal conversion for integers that fit into a
-       single word of a PyLongObject (performance gain is around 15%).
-
-    3) Add real(), imag(), conjugate(), __complex__().
-
-    4) Add Fraction and complex comparisons (enabled for Python-3.2).
-       For compatibility reasons this feature is disabled for Python-2.x
-       and Python-3.1; it can be enabled by removing some #ifdefs in the
-       source.
-
-    5) The Decimal constructor now accepts lists as well as tuples.
-
-    6) Add support for DecimalTuple output.
-
-    **bug fixes**
-
-    1) A couple of refleaks that could be triggered by unlikely failures
-       of Python API functions have been fixed.
-
-
 Version 2.2
 -----------
-
-libmpdec
-~~~~~~~~
 
     **build process**
 
@@ -77,37 +77,12 @@ libmpdec
     1) Make PPRO inline assembly PIC-compliant (for the dynamic library).
 
 
-cdecimal
-~~~~~~~~
-
-    **workarounds for toolchain bugs**
-
-    1) Enable the libmpdec workarounds in setup.py.
-
-    **features**
-
-    1) deccheck.py: Suppress decimal.py bugs in max, min, max_mag, min_mag
-       for Python versions 2.6.0 and 2.6.1.
-
-    2) deccheck.py: Exit for Python versions 2.5.0-2.5.4, since there are
-       uncharted bugs in decimal.py that yield false positives in the output.
-       Note that cdecimal works fine, it is just impractical to run the tests.
-
-    3) deccheck.py: Add proper exit status.
-
-|
-| Thanks Hans-Peter Jansen for reporting many of these issues.
-
-
 Version 2.1
 -----------
 
 Version 2.1 was never released, but escaped into the wild via the Makefile
 and setup.py in cdecimal-1.97-rc2.tar.gz. Both files already had that version
 number.
-
-libmpdec
-~~~~~~~~
 
     **features**
 
@@ -126,33 +101,9 @@ libmpdec
     2) Handle allocation failures in _mpd_fntmul under extreme conditions.
 
 
-cdecimal
-~~~~~~~~
-
-    **features**
-
-    1) Full compatibility with decimal.py 3.2, including the new hash
-       function and float operations.
-
-    2) With the new FloatOperation signal, accidental float operations
-       can be detected.
-
-    3) The module has 85% code coverage. All lines except failures
-       of Python C-API functions are tested.
-
-    4) Add 'rounding' argument to quantize().
-
-    **bug fixes**
-
-    1) Several minor bug fixes, most of them deal with proper handling
-       of allocation failures under extreme conditions.
-
 
 Version 1.2.1
 -------------
-
-libmpdec
-~~~~~~~~
 
     **bug fixes**
 
@@ -160,32 +111,8 @@ libmpdec
        This caused compilation to fail on non-x64 platforms.
 
 
-cdecimal
-~~~~~~~~
-
-    **features**
-
-    1) setup.py: Build the module directly on AIX and let distutils
-       figure out the linking.
-
-    **bug fixes**
-
-    1) IMPORTANT: The traps in the DefaultContext and BasicContext were
-       not initialized correctly, which prevented some exceptions from
-       being raised.
-
-       This bug was introduced in version 1.2 in the process of reworking
-       DefaultContext/BasicContext.
-
-    2) context.setflags() and context.settraps() incorrectly returned -1
-       instead of NULL/Py_NONE.
-
-
 Version 1.2
 -----------
-
-libmpdec
-~~~~~~~~
 
     **features**
 
@@ -209,37 +136,6 @@ libmpdec
 
     2) In rare corner cases Underflow was not set in
        transcendental functions.
-
-
-cdecimal
-~~~~~~~~
-
-    **features**
-
-    1) Speed up threading: New speed penalty is about 16%. The new
-       default is to compile with thread local contexts enabled.
-       To get the faster version without automatic thread context
-       handling (previous default), compile --without-threads.
-
-    2) Make clamp a public context field. Allow both _clamp and clamp
-       for backwards compatibility.
-
-    3) Add IEEEContext() factory function for interchange format contexts.
-
-    4) All sNaN comparisons raise InvalidOperation.
-
-    **compatibility fixes**
-
-    1) context.copy() should not zero the status.
-
-    2) Module default context is initialized from DefaultContext
-       on first access.
-
-    3) Use DefaultContext for the Context() constructor.
-
-    4) format() uses the 'capitals' setting of the context as default.
-
-    5) Change order of Context.__repr__ to match decimal.py.
 
 
 

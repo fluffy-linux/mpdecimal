@@ -1,4 +1,4 @@
-/* config.h.in.  Generated from configure.in by autoheader.  */
+/* config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Define if we can use x64 gcc inline assembler. */
 #undef HAVE_GCC_ASM_FOR_X64
