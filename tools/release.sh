@@ -2,7 +2,7 @@
 
 
 VERSIONED_FILES=\
-"LIBINSTALL.txt Makefile.vc PKG-INFO configure configure.in setup.py"
+"configure configure.ac libmpdec/Makefile.vc vcbuild/vcbuild32.bat vcbuild/vcbuild64.bat"
 
 for file in $VERSIONED_FILES; do
     sed -i "s/@RELEASE_VERSION@/$@/g" $file
