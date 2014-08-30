@@ -12301,6 +12301,12 @@ xfmt12257  format  9.99e425000000  '.0e'  ->  1e+425000001
 xfmt12258  format  1e-849999999  '.10e'  ->  1.0000000000e-849999999
 
 
+-- '%' formatting: add trailing percent sign for special values.
+xfmt12259  format  NaN123  '%'        ->  'NaN123%'
+xfmt12260  format  sNaN    '+10.10%'  ->  '    +sNaN%'
+xfmt12261  format  Inf     ' 10.10%'  ->  ' Infinity%'
+
+
 -- 64-bit only
 cov64x00001  format  9.99e999999999999999999  'g'    ->  9.99e+999999999999999999
 cov64x00002  format  9.99e999999999999999999  '.3g'  ->  9.99e+999999999999999999

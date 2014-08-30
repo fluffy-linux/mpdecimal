@@ -1,13 +1,13 @@
 
 AC_PREREQ([2.67])
-AC_INIT(mpdecimal, 2.4.0, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
+AC_INIT(mpdecimal, 2.4.1, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_FILES([Makefile libmpdec/Makefile tests/Makefile libmpdec/mpdecimal.h])
 AC_ARG_VAR(MACHINE, [force configuration: x64, uint128, ansi64, ppro, ansi32, ansi-legacy])
 
 LIBSTATIC=libmpdec.a
 LIBSONAME=libmpdec.so.2
-LIBSHARED=libmpdec.so.2.4.0
+LIBSHARED=libmpdec.so.2.4.1
 AC_SUBST(LIBSTATIC)
 AC_SUBST(LIBSONAME)
 AC_SUBST(LIBSHARED)
@@ -49,7 +49,7 @@ AC_CHECK_TYPE(__uint128_t, AC_DEFINE(HAVE_UINT128_T, 1,
 
 # Sizes of various types:
 AC_CHECK_SIZEOF(size_t, 4)
-AC_CHECK_SIZEOF(__uint128_t, 8)
+AC_CHECK_SIZEOF(__uint128_t, 16)
 
 # x64 with gcc asm:
 AC_MSG_CHECKING(for x64 gcc inline assembler)
@@ -134,34 +134,32 @@ sun*|Sun*)
 esac
 
 # Compiler dependent settings:
-MPD_WARN="-Wall"
-MPD_OPT="-O2 -fpic"
+MPD_WARN=
+MPD_OPT="-O2"
 MPD_PGEN=
 MPD_PUSE=
 case $CC in
     *gcc*)
         MPD_WARN="-Wall -W -Wno-unknown-pragmas -std=c99 -pedantic"
-        MPD_OPT="-O2 -fpic"
+        MPD_OPT="-O2"
         MPD_PGEN="-fprofile-generate -fprofile-values"
         MPD_PUSE="-fprofile-use -freorder-blocks"
         ;;
     *icc*)
         AR=xiar
         MPD_WARN="-Wall -Wno-unknown-pragmas"
-        MPD_OPT="-O2 -fpic"
+        MPD_OPT="-O2"
         MPD_PGEN="-wd11505 -prof-gen"
         MPD_PUSE="-wd11505 -prof-use"
         ;;
     *clang*)
         MPD_WARN="-Wall -W -Wno-unknown-pragmas"
-        MPD_OPT="-O2 -fpic"
+        MPD_OPT="-O2"
         ;;
     *suncc*)
-        MPD_WARN=
-        MPD_OPT="-O2 -fpic"
+        MPD_OPT="-O2"
         ;;
     *ccomp*)
-        MPD_WARN=
         MPD_CONFIG="-DCONFIG_32 -DANSI -DLEGACY_COMPILER"
         MPD_OPT="-fstruct-passing -fstruct-assign"
         LD="gcc"
@@ -249,7 +247,7 @@ if test -n "$MACHINE"; then
 elif test $ac_cv_sizeof_size_t -eq 8; then
     if test $have_gcc_asm_for_x64 = yes; then
         MACHINE="x64"
-    elif test $ac_cv_sizeof__uint128_t -eq 8; then
+    elif test $ac_cv_type___uint128_t = yes; then
         MACHINE="uint128"
     else
         MACHINE="ansi64"

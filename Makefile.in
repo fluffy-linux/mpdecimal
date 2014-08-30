@@ -24,6 +24,9 @@ default: FORCE
 check: default
 	cd tests && $(MAKE) && ./runshort.sh
 
+check_alloc: default
+	cd tests && $(MAKE) && ./runshort_alloc.sh
+
 profile: FORCE
 	cd libmpdec && $(MAKE) profile
 

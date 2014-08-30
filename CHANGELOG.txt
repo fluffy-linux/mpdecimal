@@ -3,6 +3,32 @@
 Changelog
 =========
 
+Version 2.4.1
+-------------
+
+    **build fixes**
+
+    1) The __uint128_t detection in ./configure has been fixed .  Failure to
+       detect the option resulted in building the significantly slower ANSI
+       target on non-x86/amd64 platforms.
+
+    2) Use -fPIC instead of -fpic to fix a build failure on SPARC platforms.
+
+    3) Split the tests into a faster "make check" and a slower "make check_alloc".
+       The latter tests allocation failures but is too slow on older machines.
+
+    4) Generate detailed test output for better feedback on slower machines.
+
+    5) The static library is now built without -fPIC, which is significantly
+       faster at least on x86.  Both the static and the shared library are
+       now tested separately.
+
+    **bug fixes**
+
+    1) PEP 3101 formatting:  With the '%' format type, a trailing percent sign
+       is now also added for infinities and NaNs.
+
+
 Version 2.4.0
 -------------
 

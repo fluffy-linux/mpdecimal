@@ -33,19 +33,22 @@ mpd_realloc_count(void *ptr, size_t size)
 void *
 mpd_malloc_fail(size_t size)
 {
-
+#ifdef TEST_ALLOC
 	if (++alloc_idx >= alloc_fail) {
 		return NULL;
 	}
+#endif
 	return malloc(size);
 }
 
 void *
 mpd_calloc_fail(size_t nmemb, size_t size)
 {
+#ifdef TEST_ALLOC
 	if (++alloc_idx >= alloc_fail) {
 		return NULL;
 	}
+#endif
 	if (rand()%2) {
 		return calloc(nmemb, size);
 	}
@@ -57,9 +60,11 @@ mpd_calloc_fail(size_t nmemb, size_t size)
 void *
 mpd_realloc_fail(void *ptr, size_t size)
 {
+#ifdef TEST_ALLOC
 	if (++alloc_idx >= alloc_fail) {
 		return NULL;
 	}
+#endif
 	return realloc(ptr, size);
 }
 

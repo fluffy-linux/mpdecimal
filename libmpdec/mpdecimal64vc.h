@@ -77,9 +77,13 @@ extern "C" {
 
 #define MPD_MAJOR_VERSION 2
 #define MPD_MINOR_VERSION 4
-#define MPD_MICRO_VERSION 0
+#define MPD_MICRO_VERSION 1
 
-#define MPD_VERSION "2.4.0"
+#define MPD_VERSION "2.4.1"
+
+#define MPD_VERSION_HEX ((MPD_MAJOR_VERSION << 24) | \
+                         (MPD_MINOR_VERSION << 16) | \
+                         (MPD_MICRO_VERSION <<  8))
 
 IMPORTEXPORT const char *mpd_version(void);
 
