@@ -59,8 +59,8 @@
 #endif
 
 
-int have_fail = 0;
-int have_printed = 0;
+int global_failure = 0;
+int file_failure = 0;
 
 
 static void
@@ -397,10 +397,6 @@ check_skip(char *id)
     for (i = 0; skipit[i] != NULL; i++) {
         if (eqtoken(id, skipit[i])) {
 #if RT_VERBOSITY == 2
-            if (!have_printed) {
-                fputs("\n\n", stderr);
-                have_printed = 1;
-            }
             fprintf(stderr, "SKIP: %s\n", id);
 #endif
             return 1;
@@ -579,24 +575,22 @@ compare_expected(const char *calc, const char *expected, uint32_t expected_statu
 #endif
 
     if (strcmp(calc, expected) != 0) {
-        if (!have_printed) {
+        if (file_failure == 0) {
             fputs("\n\n", stderr);
-            have_printed = 1;
         }
         fprintf(stderr, "FAIL: %s  calc: %s  expected: %s\n",
                         id, calc, expected);
-        have_fail = 1;
+        global_failure = file_failure = 1;
     }
     if (ctx->status != expected_status) {
-        if (!have_printed) {
+        if (file_failure == 0) {
             fputs("\n\n", stderr);
-            have_printed = 1;
         }
         mpd_snprint_flags(ctxstatus, MPD_MAX_FLAG_STRING, ctx->status),
         mpd_snprint_flags(expstatus, MPD_MAX_FLAG_STRING, expected_status);
         fprintf(stderr, "FAIL: %s: status:  calc: %s  expected: %s\n",
                 id, ctxstatus, expstatus);
-        have_fail = 1;
+        global_failure = file_failure = 1;
     }
 }
 
@@ -4519,12 +4513,17 @@ doit(char *filename)
 
     ctx.traps = MPD_Malloc_error;
 
+    file_failure = 0;
     if (strcmp(filename, "-") == 0) {
         file = stdin;
     }
     else {
         if ((file = fopen(filename, "r")) == NULL) {
             mpd_err_fatal("could not open %s", filename);
+        }
+        if (!startswith(filename, "official") && !startswith(filename, "additional")) {
+            printf("%s ...", filename);
+            fflush(stdout);
         }
     }
 
@@ -5106,6 +5105,16 @@ doit(char *filename)
     if (file != stdin) {
         fclose(file);
     }
+
+    if (!startswith(filename, "official") &&
+        !startswith(filename, "additional") &&
+        !file_failure) {
+        printf(" PASS\n");
+    }
+    else {
+        printf("\n");
+    }
+    fflush(stdout);
 }
 
 
@@ -5130,12 +5139,12 @@ int main(int argc, char **argv)
     }
 
     /* Test version */
-    if (strcmp(mpd_version(), "2.4.0") != 0) {
-        fputs("runtest: error: mpd_version() != 2.4.0\n", stderr);
+    if (strcmp(mpd_version(), "2.4.1") != 0) {
+        fputs("runtest: error: mpd_version() != 2.4.1\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (strcmp(MPD_VERSION, "2.4.0") != 0) {
-        fputs("runtest: error: MPD_VERSION != 2.4.0\n", stderr);
+    if (strcmp(MPD_VERSION, "2.4.1") != 0) {
+        fputs("runtest: error: MPD_VERSION != 2.4.1\n", stderr);
         exit(EXIT_FAILURE);
     }
     if (MPD_MAJOR_VERSION != 2) {
@@ -5146,8 +5155,12 @@ int main(int argc, char **argv)
         fputs("runtest: error: MPD_MINOR_VERSION != 4\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (MPD_MICRO_VERSION != 0) {
-        fputs("runtest: error: MPD_MICRO_VERSION != 0\n", stderr);
+    if (MPD_MICRO_VERSION != 1) {
+        fputs("runtest: error: MPD_MICRO_VERSION != 1\n", stderr);
+        exit(EXIT_FAILURE);
+    }
+    if (MPD_VERSION_HEX != 0x02040100) {
+        fputs("runtest: error: MPD_VERSION_HEX != 0x02040100\n", stderr);
         exit(EXIT_FAILURE);
     }
 
@@ -5188,14 +5201,10 @@ int main(int argc, char **argv)
         mpd_del(result);
         mpd_del(result1);
         mpd_del(result2);
-
-        if (have_printed) {
-            fputc('\n', stderr);
-        }
     }
 
 
-    return have_fail;
+    return global_failure;
 }
 
 

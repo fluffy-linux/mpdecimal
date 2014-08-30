@@ -85,8 +85,8 @@ suncc
                    -xtarget=native -library=sunperf" \
                         CC=/opt/solarisstudio12.3/bin/cc
 
-     32-bit build
-     ~~~~~~~~~~~~
+      32-bit build
+      ~~~~~~~~~~~~
 
          The 32-bit build appears to work without any special flags.
 
@@ -94,9 +94,21 @@ suncc
 xlc
 ===
 
-   For a while http://buildbot.python.org/ had an AIX/xlc buildslave which
-   successfully compiled libmpdec.
+   64-bit build
+   ------------
 
+      Instructions to build libmpdec.a:
+
+         1) ./configure CC=xlc_r AR="ar -X64" CFLAGS="-q64 -qmaxmem=70000" LDFLAGS="-q64"
+
+         2) Edit libmpdec/Makefile and remove $(LIBSHARED) from the default target.
+
+         3) Edit tests/Makefile and remove runtest_shared and runtest_alloc_shared
+            from the default target.
+
+         4) make
+
+         5) make check
 
 
 CompCert

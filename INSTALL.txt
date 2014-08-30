@@ -10,14 +10,19 @@
 ./configure
 
 
-# Short tests. On a fast machine 5 min for CONFIG_64 and 10 min
-# for CONFIG_32.
+#
+# Short tests. On a fast machine 30s for CONFIG_64 and 60s for CONFIG_32.
 #
 # ./runshort.sh attempts to download the official tests from
 # http://speleotrove.com/decimal/dectest.zip. If wget is
 # not installed, download dectest.zip and put the contents
 # into the tests/testdata directory.
 make check
+
+#
+# Alternatively: Short tests with allocation failure testing.
+# On a fast machine 5 min for CONFIG_64 and 10 min for CONFIG_32.
+make check_alloc
 
 
 # Production build:
