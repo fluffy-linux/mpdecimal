@@ -1,13 +1,13 @@
 
 AC_PREREQ([2.67])
-AC_INIT(mpdecimal, 2.4.1, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
+AC_INIT(mpdecimal, 2.4.2, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
 AC_CONFIG_HEADER(config.h)
 AC_CONFIG_FILES([Makefile libmpdec/Makefile tests/Makefile libmpdec/mpdecimal.h])
 AC_ARG_VAR(MACHINE, [force configuration: x64, uint128, ansi64, ppro, ansi32, ansi-legacy])
 
 LIBSTATIC=libmpdec.a
 LIBSONAME=libmpdec.so.2
-LIBSHARED=libmpdec.so.2.4.1
+LIBSHARED=libmpdec.so.2.4.2
 AC_SUBST(LIBSTATIC)
 AC_SUBST(LIBSONAME)
 AC_SUBST(LIBSHARED)

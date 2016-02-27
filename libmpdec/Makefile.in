@@ -34,6 +34,12 @@ endif
 
 MPD_CFLAGS_SHARED = $(MPD_CFLAGS) -fPIC
 
+ifeq ($(shell uname), Darwin)
+  MPD_SOFLAGS=-dynamiclib -Wl,-install_name,$(LIBSONAME)
+else
+  MPD_SOFLAGS=-shared -Wl,-soname,$(LIBSONAME)
+endif
+
 
 default: $(LIBSTATIC) $(LIBSHARED)
 
@@ -53,7 +59,7 @@ $(LIBSTATIC): Makefile $(OBJS)
 	$(RANLIB) $(LIBSTATIC)
 
 $(LIBSHARED): Makefile $(SHARED_OBJS)
-	$(LD) $(MPD_LDFLAGS) -shared -Wl,-soname,$(LIBSONAME) -o $(LIBSHARED) $(SHARED_OBJS) -lm
+	$(LD) $(MPD_LDFLAGS) $(MPD_SOFLAGS) -o $(LIBSHARED) $(SHARED_OBJS) -lm
 	ln -sf $(LIBSHARED) libmpdec.so
 	ln -sf $(LIBSHARED) $(LIBSONAME)
 

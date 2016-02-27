@@ -8,7 +8,7 @@
     <meta content="index,follow" name="robots" />
 <meta content="libmpdec documentation" name="description" />
 
-    <title>Assignment, Conversions, I/O &mdash; mpdecimal 2.4.1 documentation</title>
+    <title>Assignment, Conversions, I/O &mdash; mpdecimal 2.4.2 documentation</title>
     
     <link rel="stylesheet" href="_static/mpdecimal-doc.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -16,7 +16,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '2.4.1',
+        VERSION:     '2.4.2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  false
@@ -25,7 +25,7 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="mpdecimal 2.4.1 documentation" href="index.html" />
+    <link rel="top" title="mpdecimal 2.4.2 documentation" href="index.html" />
     <link rel="next" title="Attributes of a Decimal" href="attributes.html" />
     <link rel="prev" title="Decimals" href="decimals.html" /> 
   </head>
@@ -211,7 +211,7 @@ This operation is not context sensitive. If <em>fmt</em> is zero, the exponent
 character is lower case, otherwise it is upper case. If allocating memory
 for the string fails, <tt class="xref c c-macro docutils literal"><span class="pre">NULL</span></tt> is returned.</p>
 <div class="versionadded">
-<p><span class="versionmodified">New in version 2.4.0: </span><tt class="xref c c-func docutils literal"><span class="pre">mpd_to_sci_size</span></tt> and <tt class="xref c c-func docutils literal"><span class="pre">mpd_to_eng_size</span></tt> additionally return the
+<p><span class="versionmodified">New in version 2.4: </span><tt class="xref c c-func docutils literal"><span class="pre">mpd_to_sci_size</span></tt> and <tt class="xref c c-func docutils literal"><span class="pre">mpd_to_eng_size</span></tt> additionally return the
 size of the result string, without counting the terminating NUL.
 The goal is to avoid an unnecessary call to <tt class="xref c c-func docutils literal"><span class="pre">strlen</span></tt>.</p>
 </div>
@@ -261,7 +261,7 @@ the only reliable way to check for errors is to check the status.</p>
 <p>Return the absolute of numbers in the range [<tt class="xref c c-macro docutils literal"><span class="pre">-MPD_UINT_MAX</span></tt>, <tt class="xref c c-macro docutils literal"><span class="pre">MPD_UINT_MAX</span></tt>].
 Error handling as above.</p>
 <div class="versionadded">
-<p><span class="versionmodified">New in version 2.4.0: </span>All functions are available in both the 64-bit and the 32-bit builds.</p>
+<p><span class="versionmodified">New in version 2.4: </span>All functions are available in both the 64-bit and the 32-bit builds.</p>
 </div>
 </div>
 </div>
@@ -352,7 +352,7 @@ terminator. On failure, -1 is returned.</p>
     </div>
     <div class="footer">
         &copy; Copyright 2010-2016, Stefan Krah.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
     </div>
   </body>
 </html>

@@ -11,7 +11,7 @@ copy /y Makefile.vc Makefile
 nmake clean
 nmake MACHINE=x64
 
-copy /y libmpdec-2.4.1.lib ..\vcbuild\dist64
+copy /y libmpdec-2.4.2.lib ..\vcbuild\dist64
 copy /y ..\tests\runtest.exe ..\vcbuild\dist64\runtest.exe
 
 nmake clean
@@ -20,9 +20,9 @@ nmake MACHINE=x64 DLL=1
 rem uncomment the next line for PGO build
 rem nmake MACHINE=x64 DLL=1 profile
 
-copy /y libmpdec-2.4.1.dll ..\vcbuild\dist64
-copy /y libmpdec-2.4.1.dll.lib ..\vcbuild\dist64
-copy /y libmpdec-2.4.1.dll.exp ..\vcbuild\dist64
+copy /y libmpdec-2.4.2.dll ..\vcbuild\dist64
+copy /y libmpdec-2.4.2.dll.lib ..\vcbuild\dist64
+copy /y libmpdec-2.4.2.dll.exp ..\vcbuild\dist64
 copy /y mpdecimal.h ..\vcbuild\dist64
 
 
