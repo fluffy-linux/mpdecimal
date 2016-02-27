@@ -2,6 +2,17 @@
 
 Changelog
 =========
+ 
+Version 2.4.2 
+------------- 
+ 
+    **build fixes** 
+ 
+    1) ICC/Windows: the optimized x86 build requires -fp-model=precise. 
+ 
+    2) OS X: the linker requires -dynamiclib and -install_name for building 
+       a shared library. 
+
 
 Version 2.4.1
 -------------

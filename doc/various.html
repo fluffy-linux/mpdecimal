@@ -8,7 +8,7 @@
     <meta content="index,follow" name="robots" />
 <meta content="libmpdec documentation" name="description" />
 
-    <title>Various Functions &mdash; mpdecimal 2.4.1 documentation</title>
+    <title>Various Functions &mdash; mpdecimal 2.4.2 documentation</title>
     
     <link rel="stylesheet" href="_static/mpdecimal-doc.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -16,7 +16,7 @@
     <script type="text/javascript">
       var DOCUMENTATION_OPTIONS = {
         URL_ROOT:    './',
-        VERSION:     '2.4.1',
+        VERSION:     '2.4.2',
         COLLAPSE_INDEX: false,
         FILE_SUFFIX: '.html',
         HAS_SOURCE:  false
@@ -25,7 +25,7 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <link rel="top" title="mpdecimal 2.4.1 documentation" href="index.html" />
+    <link rel="top" title="mpdecimal 2.4.2 documentation" href="index.html" />
     <link rel="next" title="Advanced Memory Handling" href="memory.html" />
     <link rel="prev" title="Arithmetic Functions" href="arithmetic.html" /> 
   </head>
@@ -339,7 +339,7 @@ In case of an error the caller must free <em>rdata</em>.</p>
 in the new base, <tt class="xref c c-macro docutils literal"><span class="pre">SIZE_MAX</span></tt> otherwise.</p>
 <p>Valid bases are in the range 2 &lt;= <em>rbase</em> &lt;= <tt class="xref c c-macro docutils literal"><span class="pre">UINT16_MAX</span></tt> + 1.</p>
 <div class="versionchanged">
-<p><span class="versionmodified">Changed in version 2.4.0: </span><em>rdata</em> is now resized if necessary.</p>
+<p><span class="versionmodified">Changed in version 2.4: </span><em>rdata</em> is now resized if necessary.</p>
 </div>
 <span class="target" id="std:topic-mpd_qexport_u32"></span><div class="highlight-c" id="std:topic-mpd_export_u32"><div class="highlight"><pre><span class="kt">size_t</span> <span class="nf">mpd_qexport_u32</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="o">*</span><span class="n">rdata</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">rlen</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">rbase</span><span class="p">,</span>
                        <span class="k">const</span> <span class="kt">mpd_t</span> <span class="o">*</span><span class="n">src</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="o">*</span><span class="n">status</span><span class="p">);</span>
@@ -362,7 +362,7 @@ of an error the caller must free <em>rdata</em>.</p>
 in the new base, <tt class="xref c c-macro docutils literal"><span class="pre">SIZE_MAX</span></tt> otherwise.</p>
 <p>Valid bases are in the range 2 &lt;= <em>rbase</em> &lt;= <tt class="xref c c-macro docutils literal"><span class="pre">UINT32_MAX</span></tt>.</p>
 <div class="versionchanged">
-<p><span class="versionmodified">Changed in version 2.4.0: </span><em>rdata</em> is now resized if necessary.</p>
+<p><span class="versionmodified">Changed in version 2.4: </span><em>rdata</em> is now resized if necessary.</p>
 </div>
 </div>
 </div>
@@ -393,16 +393,13 @@ They are provided for full compliance with the specification.</p>
 <span class="cm">/* Macro defining the complete version as a string. */</span>
 <span class="n">MPD_VERSION</span>
 
-<span class="cm">/* Version as a hex number. */</span>
-<span class="n">MPD_VERSION_HEX</span>
-
 <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">mpd_version</span><span class="p">(</span><span class="kt">void</span><span class="p">);</span>
 </pre></div>
 </div>
 <p>Library version information.  <tt class="xref c c-func docutils literal"><span class="pre">mpd_version</span></tt> returns the MPD_VERSION macro
 from the header that the library was compiled with.</p>
 <div class="versionadded">
-<p><span class="versionmodified">New in version 2.4.0.</span></p>
+<p><span class="versionmodified">New in version 2.4.</span></p>
 </div>
 </div>
 </div>
@@ -428,7 +425,7 @@ from the header that the library was compiled with.</p>
     </div>
     <div class="footer">
         &copy; Copyright 2010-2016, Stefan Krah.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
     </div>
   </body>
 </html>
