@@ -1,38 +1,113 @@
 
 AC_PREREQ([2.67])
-AC_INIT(mpdecimal, 2.4.2, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
+AC_INIT(mpdecimal, 2.5.0, mpdecimal-bugs@bytereef.org, mpdecimal, http://www.bytereef.org/mpdecimal/index.html)
 AC_CONFIG_HEADER(config.h)
-AC_CONFIG_FILES([Makefile libmpdec/Makefile tests/Makefile libmpdec/mpdecimal.h])
+AC_CONFIG_FILES([Makefile libmpdec/Makefile tests/Makefile libmpdec/mpdecimal.h libmpdec++/Makefile tests++/Makefile])
 AC_ARG_VAR(MACHINE, [force configuration: x64, uint128, ansi64, ppro, ansi32, ansi-legacy])
 
+
+# System and machine type (only used for Solaris, Darwin and BSD):
+AC_MSG_CHECKING(system as reported by uname -s)
+ac_sys_system=`uname -s`
+AC_MSG_RESULT($ac_sys_system)
+
 LIBSTATIC=libmpdec.a
-LIBSONAME=libmpdec.so.2
-LIBSHARED=libmpdec.so.2.4.2
+case $ac_sys_system in
+    darwin*|Darwin*)
+        LIBNAME="libmpdec.dylib"
+        LIBSONAME="libmpdec.2.dylib"
+        LIBSHARED="libmpdec.2.5.0.dylib"
+        CONFIGURE_LDFLAGS="-dynamiclib -install_name @rpath/$LIBSONAME -compatibility_version 2.5 -current_version 2.5.0"
+        ;;
+    *)
+        LIBNAME="libmpdec.so"
+        LIBSONAME="libmpdec.so.2"
+        LIBSHARED="libmpdec.so.2.5.0"
+        CONFIGURE_LDFLAGS="-shared -Wl,-soname,$LIBSONAME"
+        ;;
+esac
+
 AC_SUBST(LIBSTATIC)
+AC_SUBST(LIBNAME)
 AC_SUBST(LIBSONAME)
 AC_SUBST(LIBSHARED)
 
+
+LIBSTATIC_CXX=libmpdec++.a
+case $ac_sys_system in
+    darwin*|Darwin*)
+        LIBNAME_CXX="libmpdec++.dylib"
+        LIBSONAME_CXX="libmpdec++.2.dylib"
+        LIBSHARED_CXX="libmpdec++.2.5.0.dylib"
+        CONFIGURE_LDXXFLAGS="-dynamiclib -install_name @rpath/$LIBSONAME_CXX -undefined dynamic_lookup -compatibility_version 2.5 -current_version 2.5.0"
+        ;;
+    *)
+        LIBNAME_CXX="libmpdec++.so"
+        LIBSONAME_CXX="libmpdec++.so.2"
+        LIBSHARED_CXX="libmpdec++.so.2.5.0"
+        CONFIGURE_LDXXFLAGS="-shared -Wl,-soname,$LIBSONAME_CXX"
+        ;;
+esac
+
+AC_SUBST(LIBSTATIC_CXX)
+AC_SUBST(LIBNAME_CXX)
+AC_SUBST(LIBSONAME_CXX)
+AC_SUBST(LIBSHARED_CXX)
 
 # Apparently purely informational for this particular build:
 AC_CANONICAL_HOST
 AC_SUBST(build)
 AC_SUBST(host)
 
+# Check whether to build libmpdec++:
+AC_MSG_CHECKING(for --enable-cxx)
+AC_ARG_ENABLE(cxx,
+              AS_HELP_STRING([--enable-cxx], [enable building libmpdec++ (default is yes)]))
+
+ENABLE_CXX="$enable_cxx"
+if test -z "$ENABLE_CXX"
+then
+    if test x"$MACHINE" = x"ansi-legacy"; then
+        ENABLE_CXX="no"
+    else
+        ENABLE_CXX="yes"
+    fi
+fi
+AC_MSG_RESULT($ENABLE_CXX)
+
+# Check whether to build using PGO:
+AC_MSG_CHECKING(for --enable-profile)
+AC_ARG_ENABLE(profile,
+              AS_HELP_STRING([--enable-profile], [enable profile-guided optimization (default is no)]))
+
+PROFILE="$enable_profile"
+if test -z "$PROFILE"
+then
+    PROFILE="no"
+fi
+AC_MSG_RESULT($PROFILE)
+if test x"$PROFILE" = x"yes"; then
+    PROFILE="profile"
+else
+    PROFILE=""
+fi
+
 # Language and compiler:
 AC_LANG_C
-saved_cflags=$CFLAGS
+saved_cflags="$CFLAGS"
 AC_PROG_CC
-CFLAGS=$saved_cflags
+CFLAGS="$saved_cflags"
+
+if test x"$ENABLE_CXX" = x"yes"; then
+    saved_cxxflags="$CXXFLAGS"
+    AC_PROG_CXX
+    CXXFLAGS="$saved_cxxflags"
+fi
 
 # ar and ranlib:
 AC_CHECK_TOOL(AR, ar, ar)
 AC_PROG_RANLIB
 AC_SUBST(RANLIB)
-
-# System and machine type (only used for Solaris and Darwin):
-AC_MSG_CHECKING(system as reported by uname -s)
-ac_sys_system=`uname -s`
-AC_MSG_RESULT($ac_sys_system)
 
 # Checks for header files:
 AC_HEADER_STDC
@@ -123,45 +198,62 @@ if test "$have_glibc_memmove_bug" = yes; then
      for memmove and bcopy.])
 fi
 
-# suncc is dectected as cc:
+# Translate cc:
 case $ac_sys_system in
+OpenBSD|FreeBSD)
+    case $CC in
+        cc)
+            CC=clang
+            CXX=clang++
+            ;;
+    esac
+    ;;
 sun*|Sun*)
     case $CC in
         cc)
             CC=suncc
             ;;
     esac
+    ;;
 esac
 
 # Compiler dependent settings:
 MPD_WARN=
+MPD_WARNXX=
 MPD_OPT="-O2"
 MPD_PGEN=
 MPD_PUSE=
 case $CC in
     *gcc*)
-        MPD_WARN="-Wall -W -Wno-unknown-pragmas -std=c99 -pedantic"
-        MPD_OPT="-O2"
+        MPD_WARN="-Wall -Wextra -Wno-unknown-pragmas -std=c99 -pedantic"
+        MPD_WARNXX="-Wall -Wextra -std=c++11 -pedantic"
+        MPD_OPT="-O2 -DNDEBUG"
         MPD_PGEN="-fprofile-generate -fprofile-values"
         MPD_PUSE="-fprofile-use -freorder-blocks"
         ;;
     *icc*)
         AR=xiar
-        MPD_WARN="-Wall -Wno-unknown-pragmas"
-        MPD_OPT="-O2"
+        LD=icc
+        CXX=icc
+        LDXX=icc
+        MPD_WARN="-Wall -Wextra -Wno-unknown-pragmas -std=c99 -pedantic -diag-disable=11074,11076"
+        MPD_WARNXX="-Wall -Wextra -std=c++11 -pedantic -diag-disable=11074,11076"
+        MPD_OPT="-O2 -DNDEBUG"
         MPD_PGEN="-wd11505 -prof-gen"
         MPD_PUSE="-wd11505 -prof-use"
         ;;
     *clang*)
-        MPD_WARN="-Wall -W -Wno-unknown-pragmas"
-        MPD_OPT="-O2"
+        MPD_WARN="-Wall -Wextra -Wno-unknown-pragmas -std=c99 -pedantic"
+        MPD_WARNXX="-Wall -Wextra -Wexit-time-destructors -std=c++11 -pedantic"
+        MPD_OPT="-O2 -DNDEBUG"
+        PROFILE="" # requires llvm-prof.
         ;;
     *suncc*)
-        MPD_OPT="-O2"
+        MPD_OPT="-O2 -DNDEBUG"
         ;;
     *ccomp*)
         MPD_CONFIG="-DCONFIG_32 -DANSI -DLEGACY_COMPILER"
-        MPD_OPT="-fstruct-passing -fstruct-assign"
+        MPD_OPT="-fstruct-passing -fstruct-assign -DNDEBUG"
         LD="gcc"
         LDFLAGS="-m32"
         ;;
@@ -280,26 +372,31 @@ fi
 # Set configuration variables:
 MPD_PREC=9
 MPD_DPREC=18
-CONFIGURE_LDFLAGS=
 case "$MACHINE" in
     x64)
         MPD_HEADER_CONFIG=$CONFIG_64
         MPD_CONFIG=$M64"-DCONFIG_64 -DASM"
-        CONFIGURE_LDFLAGS=$M64
+        MPD_XXCONFIG=$M64
+        CONFIGURE_LDFLAGS="$M64 $CONFIGURE_LDFLAGS"
+        CONFIGURE_LDXXFLAGS="$M64 $CONFIGURE_LDXXFLAGS"
         MPD_PREC=19
         MPD_DPREC=38
         ;;
     uint128)
         MPD_HEADER_CONFIG=$CONFIG_64
         MPD_CONFIG=$M64"-DCONFIG_64 -DANSI -DHAVE_UINT128_T"
-        CONFIGURE_LDFLAGS=$M64
+        MPD_XXCONFIG=$M64
+        CONFIGURE_LDFLAGS="$M64 $CONFIGURE_LDFLAGS"
+        CONFIGURE_LDXXFLAGS="$M64 $CONFIGURE_LDXXFLAGS"
         MPD_PREC=19
         MPD_DPREC=38
         ;;
     ansi64)
         MPD_HEADER_CONFIG=$CONFIG_64
         MPD_CONFIG=$M64"-DCONFIG_64 -DANSI"
-        CONFIGURE_LDFLAGS=$M64
+        MPD_XXCONFIG=$M64
+        CONFIGURE_LDFLAGS="$M64 $CONFIGURE_LDFLAGS"
+        CONFIGURE_LDXXFLAGS="$M64 $CONFIGURE_LDXXFLAGS"
         MPD_PREC=19
         MPD_DPREC=38
         ;;
@@ -307,12 +404,16 @@ case "$MACHINE" in
         # Formerly ansi64c32, for testing only!
         MPD_HEADER_CONFIG=$CONFIG_FULLCOV
         MPD_CONFIG=$M64"-DCONFIG_32 -DANSI"
-        CONFIGURE_LDFLAGS=$M64
+        MPD_XXCONFIG=$M64
+        CONFIGURE_LDFLAGS="$M64 $CONFIGURE_LDFLAGS"
+        CONFIGURE_LDXXFLAGS="$M64 $CONFIGURE_LDXXFLAGS"
         ;;
     ppro)
         MPD_HEADER_CONFIG=$CONFIG_32
         MPD_CONFIG=$M32"-DCONFIG_32 -DPPRO -DASM"
-        CONFIGURE_LDFLAGS=$M32
+        MPD_XXCONFIG=$M32
+        CONFIGURE_LDFLAGS="$M32 $CONFIGURE_LDFLAGS"
+        CONFIGURE_LDXXFLAGS="$M32 $CONFIGURE_LDXXFLAGS"
         # Some versions of gcc miscompile inline asm:
         # http://gcc.gnu.org/bugzilla/show_bug.cgi?id=46491
         # http://gcc.gnu.org/ml/gcc/2010-11/msg00366.html
@@ -354,12 +455,16 @@ case "$MACHINE" in
     ansi32)
         MPD_HEADER_CONFIG=$CONFIG_32
         MPD_CONFIG=$M32"-DCONFIG_32 -DANSI"
-        CONFIGURE_LDFLAGS=$M32
+        MPD_XXCONFIG=$M32
+        CONFIGURE_LDFLAGS="$M32 $CONFIGURE_LDFLAGS"
+        CONFIGURE_LDXXFLAGS="$M32 $CONFIGURE_LDXXFLAGS"
         ;;
     ansi-legacy)
         MPD_HEADER_CONFIG=$CONFIG_32_LEGACY
+        MPD_XXCONFIG=$M32
         MPD_CONFIG=$M32"-DCONFIG_32 -DANSI -DLEGACY_COMPILER"
-        CONFIGURE_LDFLAGS=$M32
+        CONFIGURE_LDFLAGS="$M32 $CONFIGURE_LDFLAGS"
+        CONFIGURE_LDXXFLAGS="$M32 $CONFIGURE_LDXXFLAGS"
         ;;
     universal)
         MPD_HEADER_CONFIG=$CONFIG_UNIVERSAL
@@ -371,7 +476,11 @@ esac
 if test -z "$LD"; then
     LD="$CC"
 fi
+if test -z "$LDXX"; then
+    LDXX="$CXX"
+fi
 AC_SUBST(LD)
+AC_SUBST(LDXX)
 AC_SUBST(AR)
 AC_SUBST(MPD_HEADER)
 AC_SUBST(MPD_WARN)
@@ -389,16 +498,33 @@ if test -z "$CFLAGS"; then
 else
     CONFIGURE_CFLAGS="$MPD_WARN $MPD_CONFIG $MPD_OPT $CFLAGS"
 fi
+
 if test "$have_glibc_memmove_bug" = yes; then
     CONFIGURE_CFLAGS="$CONFIGURE_CFLAGS -U_FORTIFY_SOURCE"
 fi
 
-if test -n "$LDFLAGS"; then
-    CONFIGURE_LDFLAGS="$LDFLAGS"
+if test -z "$CXXFLAGS"; then
+    CONFIGURE_CXXFLAGS="$MPD_WARNXX $MPD_XXCONFIG -O3 -DNDEBUG"
+else
+    CONFIGURE_CXXFLAGS="$MPD_WARNXX $MPD_XXCONFIG -O3 -DNDEBUG $CXXFLAGS"
 fi
+
+if test -n "$LDFLAGS"; then
+    CONFIGURE_LDFLAGS="$CONFIGURE_LDFLAGS $LDFLAGS"
+fi
+
+if test -n "$LDXXFLAGS"; then
+    CONFIGURE_LDXXFLAGS="$CONFIGURE_LDXXFLAGS $LDXXFLAGS"
+fi
+
+AC_SUBST(ENABLE_CXX)
+AC_SUBST(PROFILE)
 
 AC_SUBST(CONFIGURE_CFLAGS)
 AC_SUBST(CONFIGURE_LDFLAGS)
+
+AC_SUBST(CONFIGURE_CXXFLAGS)
+AC_SUBST(CONFIGURE_LDXXFLAGS)
 
 AC_OUTPUT
 

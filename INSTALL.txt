@@ -24,10 +24,7 @@ make check
 # On a fast machine 5 min for CONFIG_64 and 10 min for CONFIG_32.
 make check_alloc
 
-
-# Production build:
-make clean
-make CFLAGS=-DNDEBUG
+# Install.
 make install
 
 
