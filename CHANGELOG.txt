@@ -2,16 +2,74 @@
 
 Changelog
 =========
- 
-Version 2.4.2 
-------------- 
- 
-    **build fixes** 
- 
-    1) ICC/Windows: the optimized x86 build requires -fp-model=precise. 
- 
-    2) OS X: the linker requires -dynamiclib and -install_name for building 
-       a shared library. 
+
+Version 2.5.0
+-------------
+
+    **New: libmpdec++**
+
+       libmpdec++ is a new C++ library around libmpdec. It frees users from
+       manual memory management and allows cleaner code using inline operators.
+
+       libmpdec++ has a thread local context, so inline operators work
+       seamlessly with threaded code.
+
+    **features**
+
+    1) New functions *mpd_qset_string_exact*, *mpd_qset_i64_exact* and
+       *mpd_qset_u64_exact*.
+
+    2) For very large precisions like *MPD_MAX_PREC* libmpdec failed with
+       *MPD_Malloc_error* even when the result was exact and required far
+       fewer digits.
+
+       Now libmpdec retries the operation with the smallest possible
+       precision for exact results.
+
+    3) ./configure now has the *--enable-profile* option for easier profile
+       guided optimization builds.  Using PGO, recent compilers produce
+       better optimized libraries with speedups in the order of 20%.
+
+    4) C++ use: All headers now assume at least C++11, so a couple of hacks
+       have been removed from the headers.  C++ compatibility is fully
+       tested in libmpdec++.
+
+    **behavior changes**
+
+    1) The functions *mpd_ceil*, *mpd_floor* and *mpd_trunc* now set
+       *MPD_Invalid_operation* when the input is *NaN* or *Infinity*.
+
+       Previously they returned special values unchanged. That behavior was
+       inspired by the similar *to_integral* function from the specification,
+       but does not seem useful for the above functions.
+
+    **build fixes**
+
+    1) OS X: Linking has been completely reworked and now uses .dylib.
+
+    2) Windows: vcstdint.h has been removed, Windows now supports stdint.h.
+
+    **bug fixes**
+
+    1) A couple of quiet functions have been made resilient against being
+       called with a "dirty" status. Note that it is not recommended in
+       general to call quiet functions with any status other than 0.
+
+    2) In runtest.c, fma_eq.decTest and powmod_eq.decTest operands were
+       accidentally reversed for the *op_eq_eq* tests.
+
+       Since both the code and the tests assumed reversed operands, the tests
+       were correct.  However, for readability this situation has been fixed.
+
+Version 2.4.2
+-------------
+
+    **build fixes**
+
+    1) ICC/Windows: the optimized x86 build requires -fp-model=precise.
+
+    2) OS X: the linker requires -dynamiclib and -install_name for building
+       a shared library.
 
 
 Version 2.4.1

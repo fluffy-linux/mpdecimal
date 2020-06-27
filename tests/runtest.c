@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 Stefan Krah. All rights reserved.
+ * Copyright (c) 2008-2020 Stefan Krah. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,18 +32,18 @@
 
 
 #include "mpdecimal.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
+
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <locale.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
-#include "io.h"
-#include "memory.h"
-#include "mptest.h"
+
 #include "malloc_fail.h"
 
 
@@ -59,9 +59,27 @@
 #endif
 
 
+int generated = 0;
 int global_failure = 0;
 int file_failure = 0;
 
+
+static mpd_ssize_t
+strtossize(const char *s, char **end, int base)
+{
+    int64_t retval;
+
+    errno = 0;
+    retval = _mpd_strtossize(s, end, base);
+    if (errno == 0 && (retval > MPD_SSIZE_MAX || retval < MPD_SSIZE_MIN)) {
+        errno = ERANGE;
+    }
+    if (errno == ERANGE) {
+        return (retval < 0) ? MPD_SSIZE_MIN : MPD_SSIZE_MAX;
+    }
+
+    return (mpd_ssize_t)retval;
+}
 
 static void
 mpd_init_rand(mpd_t *x)
@@ -108,7 +126,7 @@ mpd_readcontext(mpd_context_t *ctx)
     ctx->status=0;
     ctx->newtrap=0;
     ctx->clamp=0;
-    ctx->allcr=0;
+    ctx->allcr=1;
 }
 
 static void
@@ -132,7 +150,7 @@ mpd_testcontext(mpd_context_t *ctx)
     ctx->status=0;
     ctx->newtrap=0;
     ctx->clamp=0;
-    ctx->allcr=0;
+    ctx->allcr=1;
 }
 
 /* Known differences that are within the spec */
@@ -380,13 +398,13 @@ const char *skipit[] = {
 static inline int
 startswith(const char *token, const char *s)
 {
-    return strncasecmp(token, s, strlen(s)) == 0;
+    return token != NULL && strncasecmp(token, s, strlen(s)) == 0;
 }
 
 static inline int
 eqtoken(const char *token, const char *s)
 {
-    return strcasecmp(token, s) == 0;
+    return token != NULL && strcasecmp(token, s) == 0;
 }
 
 static int
@@ -409,11 +427,13 @@ check_skip(char *id)
 static char *
 nexttoken(char *cp)
 {
-    static char *start;
-    static char *end;
+    static char *start = NULL;
+    static char *end = NULL;
 
-    if (cp == NULL)
+    if (cp == NULL) {
+        assert(end != NULL);
         cp = end;
+    }
 
     for (; *cp != '\0'; cp++) {
         if (isspace((unsigned char)*cp)) {
@@ -850,14 +870,18 @@ _mpd_to_sci(const mpd_t *dec, int fmt)
 static void
 _cp_MpdCtx(char **token, char *(*func)(const mpd_t *, int), mpd_context_t *ctx)
 {
+    mpd_context_t maxctx;
     char *calc;
     char *expected, *expected_fail;
     uint32_t expstatus;
     int n;
 
-    ctx->status = 0;
-    /* status should be set in conversion */
-    n = scan_1op_result(op, &expected, token, ctx);
+    mpd_readcontext(&maxctx);
+
+    /* status should be set in conversion (unless we have generated tests from stdin) */
+    mpd_context_t *workctx = generated ? &maxctx : ctx;
+    workctx->status = 0;
+    n = scan_1op_result(op, &expected, token, workctx);
 
     /* scan expected conditions */
     expstatus = scan_conditions(token+n);
@@ -865,13 +889,13 @@ _cp_MpdCtx(char **token, char *(*func)(const mpd_t *, int), mpd_context_t *ctx)
     /* Allocation failures for mpd_set_string */
     for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail++) {
         mpd_init_rand(tmp);
-        ctx->status = 0;
+        workctx->status = 0;
 
-        mpd_set_alloc_fail(ctx);
-        (void)scan_1op_result(tmp, &expected_fail, token, ctx);
-        mpd_set_alloc(ctx);
+        mpd_set_alloc_fail(workctx);
+        (void)scan_1op_result(tmp, &expected_fail, token, workctx);
+        mpd_set_alloc(workctx);
 
-        if (!(ctx->status&MPD_Malloc_error)) {
+        if (!(workctx->status&MPD_Malloc_error)) {
             break;
         }
         ASSERT(mpd_isnan(tmp))
@@ -882,29 +906,29 @@ _cp_MpdCtx(char **token, char *(*func)(const mpd_t *, int), mpd_context_t *ctx)
 
     /* make a copy of the operand */
     mpd_init_rand(tmp);
-    mpd_copy(tmp, op, ctx);
+    mpd_copy(tmp, op, workctx);
 
     calc = func(tmp, 1);
 
     /* compare the calculated result to the expected result */
-    compare_expected(calc, expected, expstatus, token[0], ctx);
+    compare_expected(calc, expected, expstatus, token[0], workctx);
     free(calc);
     check_equalmem(tmp, op, token[0]);
 
     /* Allocation failures */
     for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail++) {
         mpd_init_rand(tmp);
-        mpd_copy(tmp, op, ctx);
+        mpd_copy(tmp, op, workctx);
 
-        mpd_set_alloc_fail(ctx);
+        mpd_set_alloc_fail(workctx);
         calc = func(tmp, 1);
-        mpd_set_alloc(ctx);
+        mpd_set_alloc(workctx);
 
         if (calc != NULL) {
             break;
         }
     }
-    compare_expected(calc, expected, expstatus, token[0], ctx);
+    compare_expected(calc, expected, expstatus, token[0], workctx);
     free(calc);
     check_equalmem(tmp, op, token[0]);
 }
@@ -913,15 +937,19 @@ _cp_MpdCtx(char **token, char *(*func)(const mpd_t *, int), mpd_context_t *ctx)
 static void
 sci_eng_size(char **token, mpd_ssize_t (*func)(char **, const mpd_t *, int), mpd_context_t *ctx)
 {
+    mpd_context_t maxctx;
     char *calc;
     char *expected, *expected_fail;
     uint32_t expstatus;
     mpd_ssize_t size;
     int n;
 
-    ctx->status = 0;
-    /* status should be set in conversion */
-    n = scan_1op_result(op, &expected, token, ctx);
+    mpd_readcontext(&maxctx);
+
+    /* status should be set in conversion (unless we have generated tests from stdin) */
+    mpd_context_t *workctx = generated ? &maxctx : ctx;
+    workctx->status = 0;
+    n = scan_1op_result(op, &expected, token, workctx);
 
     /* scan expected conditions */
     expstatus = scan_conditions(token+n);
@@ -929,13 +957,13 @@ sci_eng_size(char **token, mpd_ssize_t (*func)(char **, const mpd_t *, int), mpd
     /* Allocation failures for mpd_set_string */
     for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail++) {
         mpd_init_rand(tmp);
-        ctx->status = 0;
+        workctx->status = 0;
 
-        mpd_set_alloc_fail(ctx);
-        (void)scan_1op_result(tmp, &expected_fail, token, ctx);
-        mpd_set_alloc(ctx);
+        mpd_set_alloc_fail(workctx);
+        (void)scan_1op_result(tmp, &expected_fail, token, workctx);
+        mpd_set_alloc(workctx);
 
-        if (!(ctx->status&MPD_Malloc_error)) {
+        if (!(workctx->status&MPD_Malloc_error)) {
             break;
         }
         ASSERT(mpd_isnan(tmp))
@@ -946,31 +974,31 @@ sci_eng_size(char **token, mpd_ssize_t (*func)(char **, const mpd_t *, int), mpd
 
     /* make a copy of the operand */
     mpd_init_rand(tmp);
-    mpd_copy(tmp, op, ctx);
+    mpd_copy(tmp, op, workctx);
 
     size = func(&calc, tmp, 1);
     ASSERT(size == (mpd_ssize_t)strlen(calc));
 
     /* compare the calculated result to the expected result */
-    compare_expected(calc, expected, expstatus, token[0], ctx);
+    compare_expected(calc, expected, expstatus, token[0], workctx);
     free(calc);
     check_equalmem(tmp, op, token[0]);
 
     /* Allocation failures */
     for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail++) {
         mpd_init_rand(tmp);
-        mpd_copy(tmp, op, ctx);
+        mpd_copy(tmp, op, workctx);
 
-        mpd_set_alloc_fail(ctx);
+        mpd_set_alloc_fail(workctx);
         size = func(&calc, tmp, 1);
-        mpd_set_alloc(ctx);
+        mpd_set_alloc(workctx);
 
         if (calc != NULL) {
             ASSERT(size == (mpd_ssize_t)strlen(calc));
             break;
         }
     }
-    compare_expected(calc, expected, expstatus, token[0], ctx);
+    compare_expected(calc, expected, expstatus, token[0], workctx);
     free(calc);
     check_equalmem(tmp, op, token[0]);
 }
@@ -981,12 +1009,12 @@ static char *
 parse_escapes(const char *s)
 {
     char hex[5];
-    char *result, *cp;
+    char *res, *cp;
     unsigned int u;
     int n;
 
-    cp = result = malloc(strlen(s)+1);
-    if (result == NULL) {
+    cp = res = malloc(strlen(s)+1);
+    if (res == NULL) {
         return NULL;
     }
 
@@ -996,14 +1024,14 @@ parse_escapes(const char *s)
         if (*s == '\\' && *(s+1) == 'x') {
             for (n = 1; n < 4; n++) {
                 if (!s[n]) {
-                    free(result);
+                    free(res);
                     return NULL;
                 }
                 hex[n] = s[n];
             }
             hex[n] = '\0';
             sscanf(hex, "%x%n", &u, &n);
-            *cp++ = u;
+            *cp++ = (char)u;
             s += n;
         }
         else {
@@ -1012,7 +1040,7 @@ parse_escapes(const char *s)
     }
 
     *cp = '\0';
-    return result;
+    return res;
 }
 
 /*
@@ -1182,6 +1210,106 @@ _Res_Op_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, mpd_context_t *)
         }
         ASSERT(mpd_isnan(result))
 
+        if (alloc_fail > 100) {
+            incr = (int)(alloc_count*0.02) + 1;
+        }
+    }
+    calc = _mpd_to_sci(result, 1);
+    compare_expected(calc, expected, expstatus, token[0], ctx);
+    free(calc);
+    check_equalmem(tmp, op, token[0]);
+
+
+    /* result equals operand */
+    mpd_init_rand(tmp);
+    mpd_copy(tmp, op, ctx);
+    ctx->status = 0;
+
+    mpd_set_alloc_count(ctx);
+    func(tmp, tmp, ctx);
+    mpd_set_alloc(ctx);
+
+    calc = _mpd_to_sci(tmp, 1);
+    compare_expected(calc, expected, expstatus, token[0], ctx);
+    free(calc);
+
+    /* Allocation failures */
+    incr = 1;
+    for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail += incr) {
+        mpd_init_rand(tmp);
+        mpd_copy(tmp, op, ctx);
+        ctx->status = 0;
+
+        mpd_set_alloc_fail(ctx);
+        func(tmp, tmp, ctx);
+        mpd_set_alloc(ctx);
+
+        if (!(ctx->status&MPD_Malloc_error)) {
+            break;
+        }
+        ASSERT(mpd_isnan(tmp))
+
+        if (alloc_fail > 100) {
+            incr = (int)(alloc_count*0.02) + 1;
+        }
+    }
+    calc = _mpd_to_sci(tmp, 1);
+    compare_expected(calc, expected, expstatus, token[0], ctx);
+    free(calc);
+}
+
+/* Test a unary function, quantize the operand before applying the actual function */
+static void
+_Res_Op_CtxWithQuantize(char *token[], void (*func)(mpd_t *, const mpd_t *, mpd_context_t *), mpd_context_t *ctx)
+{
+    mpd_context_t maxctx;
+    char *calc;
+    char *expected;
+    uint32_t expstatus;
+    int n, incr;
+
+    mpd_readcontext(&maxctx);
+    maxctx.traps = MPD_Malloc_error;
+
+    n = scan_2ops_result(op, op1, &expected, token, &maxctx);
+    mpd_quantize(op, op, op1, &maxctx);
+
+    /* scan expected conditions */
+    expstatus = scan_conditions(token+n);
+
+
+    /* result and tmp are distinct decimals */
+    mpd_init_rand(tmp);
+    mpd_copy(tmp, op, ctx);
+    mpd_init_rand(result);
+    ctx->status = 0;
+
+    mpd_set_alloc_count(ctx);
+    func(result, tmp, ctx);
+    mpd_set_alloc(ctx);
+
+    calc = _mpd_to_sci(result, 1);
+    compare_expected(calc, expected, expstatus, token[0], ctx);
+    free(calc);
+    check_equalmem(tmp, op, token[0]);
+
+    /* Allocation failures */
+    incr = 1;
+    for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail += incr) {
+        mpd_init_rand(tmp);
+        mpd_copy(tmp, op, ctx);
+        mpd_minalloc(result);
+        ctx->status = 0;
+
+        mpd_set_alloc_fail(ctx);
+        func(result, tmp, ctx);
+        mpd_set_alloc(ctx);
+
+        if (!(ctx->status&MPD_Malloc_error)) {
+            break;
+        }
+        ASSERT(mpd_isnan(result))
+
         if (alloc_fail > 50) {
             incr = (int)(alloc_count*0.02) + 1;
         }
@@ -1230,9 +1358,26 @@ _Res_Op_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, mpd_context_t *)
     free(calc);
 }
 
+static void
+resolve_status_hack(uint32_t *expstatus, const uint32_t status)
+{
+    /* hack #1 to resolve disagreement with results generated by decimal.py */
+    if ((*expstatus & MPD_Invalid_operation) &&
+        (status & MPD_Division_impossible)) {
+        *expstatus = MPD_Division_impossible;
+    }
+
+    /* hack #2 to resolve disagreement with results generated by decimal.py */
+    if ((*expstatus & MPD_Invalid_operation) &&
+        (status & MPD_Division_undefined)) {
+        *expstatus = MPD_Division_undefined;
+    }
+}
+
 /* Test a binary function */
 static void
-_Res_Binop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t *, mpd_context_t *), mpd_context_t *ctx)
+_Res_Binop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t *, mpd_context_t *),
+               mpd_context_t *ctx, int resolve_status)
 {
     mpd_context_t maxctx;
     char *calc;
@@ -1248,7 +1393,6 @@ _Res_Binop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t *
     /* scan expected conditions */
     expstatus = scan_conditions(token+n);
 
-
     /* three distinct decimals */
     mpd_init_rand(tmp1);
     mpd_init_rand(tmp2);
@@ -1260,6 +1404,10 @@ _Res_Binop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t *
     mpd_set_alloc_count(ctx);
     func(result, tmp1, tmp2, ctx);
     mpd_set_alloc(ctx);
+
+    if (resolve_status) {
+        resolve_status_hack(&expstatus, ctx->status);
+    }
 
     calc = _mpd_to_sci(result, 1);
     compare_expected(calc, expected, expstatus, token[0], ctx);
@@ -1387,7 +1535,8 @@ _Res_Binop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t *
 
 /* Test a binary function where op1 == op2. */
 static void
-_Res_EqualBinop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t *, mpd_context_t *), mpd_context_t *ctx)
+_Res_EqualBinop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t *, mpd_context_t *),
+                    mpd_context_t *ctx, int resolve_status)
 {
     mpd_context_t maxctx;
     char *calc;
@@ -1412,18 +1561,8 @@ _Res_EqualBinop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mp
 
     func(result, tmp, tmp, ctx);
 
-    /* hack #1 to resolve disagreement with results generated by decimal.py */
-    if (expstatus&MPD_Invalid_operation && ctx->status&MPD_Division_impossible) {
-        expstatus = MPD_Division_impossible;
-    }
-    /* hack #2 to resolve disagreement with results generated by decimal.py */
-    if (expstatus&MPD_Invalid_operation && ctx->status&MPD_Division_undefined) {
-        expstatus = MPD_Division_undefined;
-    }
-    /* hack #3 to resolve disagreement with results generated by decimal.py (power) */
-    if ((startswith(expected, "-0E") || startswith(expected, "0E")) && mpd_isnan(result)) {
-        expected = "NaN";
-        expstatus = MPD_Invalid_operation;
+    if (resolve_status) {
+        resolve_status_hack(&expstatus, ctx->status);
     }
 
     calc = _mpd_to_sci(result, 1);
@@ -1485,7 +1624,8 @@ _Res_EqualBinop_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mp
 
 /* Test a binary function with a binary result */
 static void
-_Binres_Binop_Ctx(char *token[], void (*func)(mpd_t *, mpd_t*, const mpd_t *, const mpd_t *, mpd_context_t *), mpd_context_t *ctx)
+_Binres_Binop_Ctx(char *token[], void (*func)(mpd_t *, mpd_t*, const mpd_t *, const mpd_t *, mpd_context_t *),
+                  mpd_context_t *ctx)
 {
     mpd_context_t maxctx;
     char *calc;
@@ -1515,18 +1655,7 @@ _Binres_Binop_Ctx(char *token[], void (*func)(mpd_t *, mpd_t*, const mpd_t *, co
     func(result1, result2, tmp1, tmp2, ctx);
     mpd_set_alloc(ctx);
 
-    /* hack #1 to resolve disagreement with results generated by decimal.py */
-    if (expstatus&MPD_Invalid_operation && ctx->status&MPD_Division_impossible) {
-        expstatus = MPD_Division_impossible;
-    }
-    /* hack #2 to resolve disagreement with results generated by decimal.py */
-    if (expstatus&MPD_Invalid_operation && ctx->status&MPD_Division_undefined) {
-        expstatus = MPD_Division_undefined;
-    }
-    /* hack #3 to resolve disagreement with results generated by decimal.py */
-    if ((startswith(expected1, "-Inf") || startswith(expected1, "Inf")) && mpd_isnan(result1)) {
-        expected1 = "NaN";
-    }
+    resolve_status_hack(&expstatus, ctx->status);
 
     calc = _mpd_to_sci(result1, 1);
     compare_expected(calc, expected1, expstatus, token[0], ctx);
@@ -1934,18 +2063,7 @@ _Binres_EqualBinop_Ctx(char *token[], void (*func)(mpd_t *, mpd_t*, const mpd_t 
 
     func(result1, result2, tmp, tmp, ctx);
 
-    /* hack #1 to resolve disagreement with results generated by decimal.py */
-    if (expstatus&MPD_Invalid_operation && ctx->status&MPD_Division_impossible) {
-        expstatus = MPD_Division_impossible;
-    }
-    /* hack #2 to resolve disagreement with results generated by decimal.py */
-    if (expstatus&MPD_Invalid_operation && ctx->status&MPD_Division_undefined) {
-        expstatus = MPD_Division_undefined;
-    }
-    /* hack #3 to resolve disagreement with results generated by decimal.py */
-    if ((startswith(expected1, "-Inf") || startswith(expected1, "Inf")) && mpd_isnan(result1)) {
-        expected1 = "NaN";
-    }
+    resolve_status_hack(&expstatus, ctx->status);
 
     calc = _mpd_to_sci(result1, 1);
     compare_expected(calc, expected1, expstatus, token[0], ctx);
@@ -2588,7 +2706,7 @@ _Res_OpEqEq_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t 
     mpd_init_rand(result);
     ctx->status = 0;
 
-    func(result, tmp2, tmp1, tmp1, ctx);
+    func(result, tmp1, tmp2, tmp2, ctx);
 
     calc = _mpd_to_sci(result, 1);
     compare_expected(calc, expected, expstatus, token[0], ctx);
@@ -2606,7 +2724,7 @@ _Res_OpEqEq_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t 
         ctx->status = 0;
 
         mpd_set_alloc_fail(ctx);
-        func(result, tmp2, tmp1, tmp1, ctx);
+        func(result, tmp1, tmp2, tmp2, ctx);
         mpd_set_alloc(ctx);
 
         if (!(ctx->status&MPD_Malloc_error)) {
@@ -2621,43 +2739,6 @@ _Res_OpEqEq_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t 
     check_equalmem(tmp2, op2, token[0]);
 
 
-    /* result == tmp1 */
-    mpd_init_rand(tmp1);
-    mpd_init_rand(tmp2);
-    mpd_copy(tmp1, op1, ctx);
-    mpd_copy(tmp2, op2, ctx);
-    ctx->status = 0;
-
-    func(tmp1, tmp2, tmp1, tmp1, ctx);
-
-    calc = _mpd_to_sci(tmp1, 1);
-    compare_expected(calc, expected, expstatus, token[0], ctx);
-    free(calc);
-    check_equalmem(tmp2, op2, token[0]);
-
-    /* Allocation failures */
-    for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail++) {
-        mpd_init_rand(tmp1);
-        mpd_init_rand(tmp2);
-        mpd_copy(tmp1, op1, ctx);
-        mpd_copy(tmp2, op2, ctx);
-        ctx->status = 0;
-
-        mpd_set_alloc_fail(ctx);
-        func(tmp1, tmp2, tmp1, tmp1, ctx);
-        mpd_set_alloc(ctx);
-
-        if (!(ctx->status&MPD_Malloc_error)) {
-            break;
-        }
-        ASSERT(mpd_isnan(tmp1))
-    }
-    calc = _mpd_to_sci(tmp1, 1);
-    compare_expected(calc, expected, expstatus, token[0], ctx);
-    free(calc);
-    check_equalmem(tmp2, op2, token[0]);
-
-
     /* result == tmp2 */
     mpd_init_rand(tmp1);
     mpd_init_rand(tmp2);
@@ -2665,7 +2746,7 @@ _Res_OpEqEq_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t 
     mpd_copy(tmp2, op2, ctx);
     ctx->status = 0;
 
-    func(tmp2, tmp2, tmp1, tmp1, ctx);
+    func(tmp2, tmp1, tmp2, tmp2, ctx);
 
     calc = _mpd_to_sci(tmp2, 1);
     compare_expected(calc, expected, expstatus, token[0], ctx);
@@ -2681,7 +2762,7 @@ _Res_OpEqEq_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t 
         ctx->status = 0;
 
         mpd_set_alloc_fail(ctx);
-        func(tmp2, tmp2, tmp1, tmp1, ctx);
+        func(tmp2, tmp1, tmp2, tmp2, ctx);
         mpd_set_alloc(ctx);
 
         if (!(ctx->status&MPD_Malloc_error)) {
@@ -2693,6 +2774,43 @@ _Res_OpEqEq_Ctx(char *token[], void (*func)(mpd_t *, const mpd_t *, const mpd_t 
     compare_expected(calc, expected, expstatus, token[0], ctx);
     free(calc);
     check_equalmem(tmp1, op1, token[0]);
+
+
+    /* result == tmp1 */
+    mpd_init_rand(tmp1);
+    mpd_init_rand(tmp2);
+    mpd_copy(tmp1, op1, ctx);
+    mpd_copy(tmp2, op2, ctx);
+    ctx->status = 0;
+
+    func(tmp1, tmp1, tmp2, tmp2, ctx);
+
+    calc = _mpd_to_sci(tmp1, 1);
+    compare_expected(calc, expected, expstatus, token[0], ctx);
+    free(calc);
+    check_equalmem(tmp2, op2, token[0]);
+
+    /* Allocation failures */
+    for (alloc_fail = 1; alloc_fail < INT_MAX; alloc_fail++) {
+        mpd_init_rand(tmp1);
+        mpd_init_rand(tmp2);
+        mpd_copy(tmp1, op1, ctx);
+        mpd_copy(tmp2, op2, ctx);
+        ctx->status = 0;
+
+        mpd_set_alloc_fail(ctx);
+        func(tmp1, tmp1, tmp2, tmp2, ctx);
+        mpd_set_alloc(ctx);
+
+        if (!(ctx->status&MPD_Malloc_error)) {
+            break;
+        }
+        ASSERT(mpd_isnan(tmp1))
+    }
+    calc = _mpd_to_sci(tmp1, 1);
+    compare_expected(calc, expected, expstatus, token[0], ctx);
+    free(calc);
+    check_equalmem(tmp2, op2, token[0]);
 }
 
 /* Test a ternary function, first, second and third operand equal */
@@ -3568,13 +3686,19 @@ scan_ssize(char *token[])
         errno = 1;
         return MPD_SSIZE_MAX;
     }
-    return mpd_strtossize(token[1], NULL, 10);
+    return strtossize(token[1], NULL, 10);
 }
 
 /*
  * Test a function with an mpd_t and an mpd_ssize_t operand.
  * Used for the shift functions.
  */
+static void
+_mpd_shiftr(mpd_t *res, const mpd_t *a, mpd_ssize_t n, mpd_context_t *ctx)
+{
+    (void)mpd_shiftr(res, a, n, ctx);
+}
+
 static void
 _Res_Op_Lsize_Ctx(int skip, char *token[], void (*func)(mpd_t *, const mpd_t *, mpd_ssize_t, mpd_context_t *), mpd_context_t *ctx)
 {
@@ -4345,6 +4469,7 @@ _Baseconv(char *token[], mpd_context_t *ctx)
  *   - mpd_abs_uint (64 bit)
  *   - mpd_get_u64
  */
+#ifndef LEGACY_COMPILER
 static void
 _u64_MpdCtx(char **token, uint64_t (*func)(const mpd_t *, mpd_context_t *), mpd_context_t *ctx)
 {
@@ -4374,6 +4499,7 @@ _u64_MpdCtx(char **token, uint64_t (*func)(const mpd_t *, mpd_context_t *), mpd_
     compare_expected(calc, expected, expstatus, token[0], ctx);
     check_equalmem(tmp, op, token[0]);
 }
+#endif
 
 /*
  * Test a function returning a uint64_t, accepting:
@@ -4539,6 +4665,11 @@ doit(char *filename)
 
         /* split a line into tokens */
         strcpy(tmpline, line);
+
+        for (int i =0; i < MAXTOKEN+1; i++) {
+            token[i] = NULL;
+        }
+
         if (split(token, tmpline) == 0) {
             goto cleanup;
         }
@@ -4559,14 +4690,15 @@ doit(char *filename)
 
         /* directives */
         if (startswith(token[0], "Precision")) {
-            l = scan_ssize(token);
-            if (errno != 0) {
-                mpd_err_fatal("%s: %s", filename, line);
+            if (strcmp(token[1], "MAX_PREC") == 0) {
+                l = MPD_MAX_PREC;
             }
-            /*if (!mpd_qsetprec(&ctx, l)) {
-                mpd_err_fatal("%s: %s", filename, line);
-            }*/
-            /* use a wider range than officially allowed */
+            else {
+                l = scan_ssize(token);
+                if (errno != 0) {
+                    mpd_err_fatal("%s: %s", filename, line);
+                }
+            }
             ctx.prec = l;
             goto cleanup;
         }
@@ -4594,27 +4726,29 @@ doit(char *filename)
         }
 
         if (startswith(token[0], "MaxExponent")) {
-            l = scan_ssize(token);
-            if (errno != 0) {
-                mpd_err_fatal("%s: %s", filename, line);
+            if (strcmp(token[1], "MAX_EMAX") == 0) {
+                l = MPD_MAX_EMAX;
             }
-            /*if (!mpd_qsetemax(&ctx, l)) {
-                mpd_err_fatal("%s: %s", filename, line);
-            }*/
-            /* use a wider range than officially allowed */
+            else {
+                l = scan_ssize(token);
+                if (errno != 0) {
+                    mpd_err_fatal("%s: %s", filename, line);
+                }
+            }
             ctx.emax = l;
             goto cleanup;
         }
 
         if (startswith(token[0], "MinExponent")) {
-            l = scan_ssize(token);
-            if (errno != 0) {
-                mpd_err_fatal("%s: %s", filename, line);
+            if (strcmp(token[1], "MIN_EMIN") == 0) {
+                l = MPD_MIN_EMIN;
             }
-            /*if (!mpd_qsetemin(&ctx, l)) {
-                mpd_err_fatal("%s: %s", filename, line);
-            }*/
-            /* use a wider range than officially allowed */
+            else {
+                l = scan_ssize(token);
+                if (errno != 0) {
+                    mpd_err_fatal("%s: %s", filename, line);
+                }
+            }
             ctx.emin = l;
             goto cleanup;
         }
@@ -4652,7 +4786,9 @@ doit(char *filename)
             if (token[1] == NULL) {
                 mpd_err_fatal("%s: %s", filename, line);
             }
-            fprintf(stderr, "locale: %s\n", token[1]);
+            if (!generated) {
+                fprintf(stderr, "locale: %s\n", token[1]);
+            }
             if (setlocale(LC_NUMERIC, token[1]) == NULL) {
                 mpd_err_fatal("%s: %s", filename, line);
             }
@@ -4725,12 +4861,14 @@ doit(char *filename)
             _Res_Op_Ctx(token, mpd_copy_negate, &ctx);
         }
         else if (eqtoken(token[1], "exp")) {
-            ctx.allcr = 0;
-                        if (testno != 126) {
-                            /* exp: err < 1ulp, but not correctly rounded */
-                _Res_Op_Ctx(token, mpd_exp, &ctx);
-                        }
-            ctx.allcr = 1;
+            if (!generated) {
+                if (testno != 126) {
+                    ctx.allcr = 0;
+                    /* exp: err < 1ulp, but not correctly rounded */
+                    _Res_Op_Ctx(token, mpd_exp, &ctx);
+                    ctx.allcr = 1;
+                }
+            }
             _Res_Op_Ctx(token, mpd_exp, &ctx);
         }
         else if (eqtoken(token[1], "invert")) {
@@ -4740,15 +4878,19 @@ doit(char *filename)
             _Res_Op_Ctx(token, mpd_invroot, &ctx);
         }
         else if (eqtoken(token[1], "ln")) {
-            ctx.allcr = 0;
-            _Res_Op_Ctx(token, mpd_ln, &ctx);
-            ctx.allcr = 1;
+            if (!generated) {
+                ctx.allcr = 0;
+                _Res_Op_Ctx(token, mpd_ln, &ctx);
+                ctx.allcr = 1;
+            }
             _Res_Op_Ctx(token, mpd_ln, &ctx);
         }
         else if (eqtoken(token[1], "log10")) {
-            ctx.allcr = 0;
-            _Res_Op_Ctx(token, mpd_log10, &ctx);
-            ctx.allcr = 1;
+            if (!generated) {
+                ctx.allcr = 0;
+                _Res_Op_Ctx(token, mpd_log10, &ctx);
+                ctx.allcr = 1;
+            }
             _Res_Op_Ctx(token, mpd_log10, &ctx);
         }
         else if (eqtoken(token[1], "logb")) {
@@ -4770,7 +4912,22 @@ doit(char *filename)
             _Res_Op_Ctx(token, mpd_reduce, &ctx);
         }
         else if (eqtoken(token[1], "squareroot")) {
+            #ifdef CONFIG_32
+                if (ctx.prec == MPD_MAX_PREC) ulimit = 16000000;
+            #endif
             _Res_Op_Ctx(token, mpd_sqrt, &ctx);
+            #ifdef CONFIG_32
+                if (ctx.prec == MPD_MAX_PREC) ulimit = SIZE_MAX;
+            #endif
+        }
+        else if (eqtoken(token[1], "quantize_squareroot")) {
+            #ifdef CONFIG_32
+                if (ctx.prec == MPD_MAX_PREC) ulimit = 16000000;
+            #endif
+            _Res_Op_CtxWithQuantize(token, mpd_sqrt, &ctx);
+            #ifdef CONFIG_32
+                if (ctx.prec == MPD_MAX_PREC) ulimit = SIZE_MAX;
+            #endif
         }
         else if (eqtoken(token[1], "tointegral")) {
             _Res_Op_Ctx(token, mpd_round_to_int, &ctx);
@@ -4800,142 +4957,154 @@ doit(char *filename)
 
         /* Binary functions with mpd_t * result */
         else if (eqtoken(token[1], "add")) {
-            _Res_Binop_Ctx(token, mpd_add, &ctx);
+            _Res_Binop_Ctx(token, mpd_add, &ctx, 0);
         }
         else if (eqtoken(token[1], "and")) {
-            _Res_Binop_Ctx(token, mpd_and, &ctx);
+            _Res_Binop_Ctx(token, mpd_and, &ctx, 0);
         }
         else if (eqtoken(token[1], "copysign")) {
-            _Res_Binop_Ctx(token, mpd_copy_sign, &ctx);
+            _Res_Binop_Ctx(token, mpd_copy_sign, &ctx, 0);
         }
         else if (eqtoken(token[1], "divide")) {
-            _Res_Binop_Ctx(token, mpd_div, &ctx);
+            #ifdef CONFIG_32
+                if (ctx.prec == MPD_MAX_PREC) ulimit = 16000000;
+            #endif
+            _Res_Binop_Ctx(token, mpd_div, &ctx, generated);
+            #ifdef CONFIG_32
+                if (ctx.prec == MPD_MAX_PREC) ulimit = SIZE_MAX;
+            #endif
         }
         else if (eqtoken(token[1], "divideint")) {
-            _Res_Binop_Ctx(token, mpd_divint, &ctx);
+            _Res_Binop_Ctx(token, mpd_divint, &ctx, generated);
         }
         else if (eqtoken(token[1], "max")) {
-            _Res_Binop_Ctx(token, mpd_max, &ctx);
+            _Res_Binop_Ctx(token, mpd_max, &ctx, 0);
         }
         else if (eqtoken(token[1], "maxmag") || eqtoken(token[1], "max_mag")) {
-            _Res_Binop_Ctx(token, mpd_max_mag, &ctx);
+            _Res_Binop_Ctx(token, mpd_max_mag, &ctx, 0);
         }
         else if (eqtoken(token[1], "min")) {
-            _Res_Binop_Ctx(token, mpd_min, &ctx);
+            _Res_Binop_Ctx(token, mpd_min, &ctx, 0);
         }
         else if (eqtoken(token[1], "minmag") || eqtoken(token[1], "min_mag")) {
-            _Res_Binop_Ctx(token, mpd_min_mag, &ctx);
+            _Res_Binop_Ctx(token, mpd_min_mag, &ctx, 0);
         }
         else if (eqtoken(token[1], "multiply")) {
-            _Res_Binop_Ctx(token, mpd_mul, &ctx);
+            _Res_Binop_Ctx(token, mpd_mul, &ctx, 0);
         }
         else if (eqtoken(token[1], "nexttoward")) {
-            _Res_Binop_Ctx(token, mpd_next_toward, &ctx);
+            _Res_Binop_Ctx(token, mpd_next_toward, &ctx, 0);
         }
         else if (eqtoken(token[1], "or")) {
-            _Res_Binop_Ctx(token, mpd_or, &ctx);
+            _Res_Binop_Ctx(token, mpd_or, &ctx, 0);
         }
         else if (eqtoken(token[1], "power")) {
-            ctx.allcr = 0;
-            _Res_Binop_Ctx(token, mpd_pow, &ctx);
-            ctx.allcr = 1;
-            _Res_Binop_Ctx(token, mpd_pow, &ctx);
+            if (!generated) {
+                ctx.allcr = 0;
+                _Res_Binop_Ctx(token, mpd_pow, &ctx, 0);
+                ctx.allcr = 1;
+            }
+            _Res_Binop_Ctx(token, mpd_pow, &ctx, 0);
         }
         else if (eqtoken(token[1], "quantize")) {
-            _Res_Binop_Ctx(token, mpd_quantize, &ctx);
+            _Res_Binop_Ctx(token, mpd_quantize, &ctx, 0);
         }
         else if (eqtoken(token[1], "resc")) {
             _Res_Op_Lsize_Ctx(SKIP_NONINT, token, mpd_rescale, &ctx);
         }
         else if (eqtoken(token[1], "remainder")) {
-            _Res_Binop_Ctx(token, mpd_rem, &ctx);
+            _Res_Binop_Ctx(token, mpd_rem, &ctx, generated);
         }
         else if (eqtoken(token[1], "remaindernear")) {
-            _Res_Binop_Ctx(token, mpd_rem_near, &ctx);
+            _Res_Binop_Ctx(token, mpd_rem_near, &ctx, generated);
         }
         else if (eqtoken(token[1], "rotate")) {
-            _Res_Binop_Ctx(token, mpd_rotate, &ctx);
+            _Res_Binop_Ctx(token, mpd_rotate, &ctx, 0);
         }
         else if (eqtoken(token[1], "scaleb")) {
-            _Res_Binop_Ctx(token, mpd_scaleb, &ctx);
+            _Res_Binop_Ctx(token, mpd_scaleb, &ctx, 0);
         }
         else if (eqtoken(token[1], "shift")) {
-            _Res_Binop_Ctx(token, mpd_shift, &ctx);
-            _Res_Op_Lsize_Ctx(SKIP_NONINT, token, mpd_shiftn, &ctx);
+            _Res_Binop_Ctx(token, mpd_shift, &ctx, 0);
+            if (!generated) {
+                _Res_Op_Lsize_Ctx(SKIP_NONINT, token, mpd_shiftn, &ctx);
+            }
         }
         else if (eqtoken(token[1], "subtract")) {
-            _Res_Binop_Ctx(token, mpd_sub, &ctx);
+            _Res_Binop_Ctx(token, mpd_sub, &ctx, 0);
         }
         else if (eqtoken(token[1], "xor")) {
-            _Res_Binop_Ctx(token, mpd_xor, &ctx);
+            _Res_Binop_Ctx(token, mpd_xor, &ctx, 0);
         }
 
         /* Binary functions with mpd_t result, equal operands */
         else if (eqtoken(token[1], "add_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_add, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_add, &ctx, 0);
         }
         else if (eqtoken(token[1], "and_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_and, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_and, &ctx, 0);
         }
         else if (eqtoken(token[1], "copysign_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_copy_sign, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_copy_sign, &ctx, 0);
         }
         else if (eqtoken(token[1], "divide_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_div, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_div, &ctx, generated);
         }
         else if (eqtoken(token[1], "divideint_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_divint, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_divint, &ctx, generated);
         }
         else if (eqtoken(token[1], "max_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_max, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_max, &ctx, 0);
         }
         else if (eqtoken(token[1], "maxmag_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_max_mag, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_max_mag, &ctx, 0);
         }
         else if (eqtoken(token[1], "min_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_min, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_min, &ctx, 0);
         }
         else if (eqtoken(token[1], "minmag_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_min_mag, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_min_mag, &ctx, 0);
         }
         else if (eqtoken(token[1], "multiply_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_mul, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_mul, &ctx, 0);
         }
         else if (eqtoken(token[1], "nexttoward_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_next_toward, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_next_toward, &ctx, 0);
         }
         else if (eqtoken(token[1], "or_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_or, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_or, &ctx, 0);
         }
         else if (eqtoken(token[1], "power_eq")) {
-            ctx.allcr = 0;
-            _Res_EqualBinop_Ctx(token, mpd_pow, &ctx);
-            ctx.allcr = 1;
-            _Res_EqualBinop_Ctx(token, mpd_pow, &ctx);
+            if (!generated) {
+                ctx.allcr = 0;
+                _Res_EqualBinop_Ctx(token, mpd_pow, &ctx, 0);
+                ctx.allcr = 1;
+            }
+            _Res_EqualBinop_Ctx(token, mpd_pow, &ctx, 0);
         }
         else if (eqtoken(token[1], "quantize_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_quantize, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_quantize, &ctx, 0);
         }
         else if (eqtoken(token[1], "remainder_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_rem, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_rem, &ctx, generated);
         }
         else if (eqtoken(token[1], "remaindernear_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_rem_near, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_rem_near, &ctx, generated);
         }
         else if (eqtoken(token[1], "rotate_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_rotate, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_rotate, &ctx, 0);
         }
         else if (eqtoken(token[1], "scaleb_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_scaleb, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_scaleb, &ctx, 0);
         }
         else if (eqtoken(token[1], "shift_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_shift, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_shift, &ctx, 0);
         }
         else if (eqtoken(token[1], "subtract_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_sub, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_sub, &ctx, 0);
         }
         else if (eqtoken(token[1], "xor_eq")) {
-            _Res_EqualBinop_Ctx(token, mpd_xor, &ctx);
+            _Res_EqualBinop_Ctx(token, mpd_xor, &ctx, 0);
         }
 
         /* Binary function with binary result */
@@ -5028,8 +5197,7 @@ doit(char *filename)
             _Res_Op_Lsize_Ctx(SKIP_NONINT, token, mpd_shiftl, &ctx);
         }
         else if (eqtoken(token[1], "shiftright")) {
-            _Res_Op_Lsize_Ctx(SKIP_NONINT, token,
-            (void (*)(mpd_t *, const mpd_t *, mpd_ssize_t, mpd_context_t *))mpd_shiftr, &ctx);
+            _Res_Op_Lsize_Ctx(SKIP_NONINT, token, _mpd_shiftr, &ctx);
         }
 
         /* Special case for mpd_qln10() */
@@ -5139,33 +5307,41 @@ int main(int argc, char **argv)
     }
 
     /* Test version */
-    if (strcmp(mpd_version(), "2.4.2") != 0) {
-        fputs("runtest: error: mpd_version() != 2.4.2\n", stderr);
+    if (strcmp(mpd_version(), "2.5.0") != 0) {
+        fputs("runtest: error: mpd_version() != 2.5.0\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (strcmp(MPD_VERSION, "2.4.2") != 0) {
-        fputs("runtest: error: MPD_VERSION != 2.4.2\n", stderr);
+    if (strcmp(MPD_VERSION, "2.5.0") != 0) {
+        fputs("runtest: error: MPD_VERSION != 2.5.0\n", stderr);
         exit(EXIT_FAILURE);
     }
+#ifdef _MSC_VER
+  #pragma warning(push)
+  #pragma warning(disable : 4127)
+#endif
     if (MPD_MAJOR_VERSION != 2) {
         fputs("runtest: error: MPD_MAJOR_VERSION != 2\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (MPD_MINOR_VERSION != 4) {
-        fputs("runtest: error: MPD_MINOR_VERSION != 4\n", stderr);
+    if (MPD_MINOR_VERSION != 5) {
+        fputs("runtest: error: MPD_MINOR_VERSION != 5\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (MPD_MICRO_VERSION != 2) {
-        fputs("runtest: error: MPD_MICRO_VERSION != 2\n", stderr);
+    if (MPD_MICRO_VERSION != 0) {
+        fputs("runtest: error: MPD_MICRO_VERSION != 0\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (MPD_VERSION_HEX != 0x02040200) {
-        fputs("runtest: error: MPD_VERSION_HEX != 0x02040200\n", stderr);
+    if (MPD_VERSION_HEX != 0x02050000) {
+        fputs("runtest: error: MPD_VERSION_HEX != 0x02050000\n", stderr);
         exit(EXIT_FAILURE);
     }
+#ifdef _MSC_VER
+  #pragma warning(pop)
+#endif
 
 
     srand((unsigned int)time(NULL));
+    generated = strcmp(argv[n], "-") == 0;
 
     for (ma = MPD_MINALLOC_MIN; ma <= limit; ma++) {
 
@@ -5173,7 +5349,7 @@ int main(int argc, char **argv)
          * that no previously allocated decimals will ever be used. */
         MPD_MINALLOC = ma;
         if (n == 2) {
-            fprintf(stderr, "minalloc: %" PRI_mpd_ssize_t "\n", MPD_MINALLOC);
+            fprintf(stderr, "minalloc: %d\n", (int)MPD_MINALLOC);
         }
 
         op = mpd_qnew();
@@ -5206,6 +5382,3 @@ int main(int argc, char **argv)
 
     return global_failure;
 }
-
-
-
