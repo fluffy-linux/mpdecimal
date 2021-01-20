@@ -38,6 +38,15 @@
 
     #undef INT8_MAX
     #define INT8_MAX ((int8_t)SCHAR_MAX)
+
+    #undef random
+    #define random rand
+    #undef srandom
+    #define srandom srand
+    #undef strncasecmp
+    #define strncasecmp _strnicmp
+    #undef strcasecmp
+    #define strcasecmp _stricmp
 #endif
 
 

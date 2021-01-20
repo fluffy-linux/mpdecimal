@@ -26,32 +26,22 @@
  */
 
 
-#ifndef TESTS_MALLOC_FAIL_H_
-#define TESTS_MALLOC_FAIL_H_
+#ifndef LIBMPDEC_VCTEST_H_
+#define LIBMPDEC_VCTEST_H_
 
 
-#include "mpdecimal.h"
-
-#include <stdio.h>
-
-
-#ifdef CONFIG_32
-extern size_t ulimit;
+/* Visual C fixes */
+#ifdef _MSC_VER
+  #undef random
+  #define random rand
+  #undef srandom
+  #define srandom srand
+  #undef strncasecmp
+  #define strncasecmp _strnicmp
+  #undef strcasecmp
+  #define strcasecmp _stricmp
+  #define strdup _strdup
 #endif
 
-extern int alloc_count;
-extern int alloc_fail;
-extern int alloc_idx;
-void *mpd_malloc_count(size_t size);
-void *mpd_calloc_count(size_t nmemb, size_t size);
-void *mpd_realloc_count(void *ptr, size_t size);
-void *mpd_malloc_fail(size_t size);
-void *mpd_calloc_fail(size_t nmemb, size_t size);
-void *mpd_realloc_fail(void *ptr, size_t size);
 
-void mpd_set_alloc_count(mpd_context_t *ctx);
-void mpd_set_alloc_fail(mpd_context_t *ctx);
-void mpd_set_alloc(mpd_context_t *ctx);
-
-
-#endif /* TESTS_MALLOC_FAIL_H_ */
+#endif /* LIBMPDEC_VCTEST_H_ */

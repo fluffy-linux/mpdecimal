@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 Stefan Krah. All rights reserved.
+ * Copyright (c) 2008-2020 Stefan Krah. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,26 +26,28 @@
  */
 
 
-#include <cstdint>
-#include <cinttypes>
-#include "decimal.hh"
+#ifndef TESTS_H_
+#define TESTS_H_
 
 
-#ifndef TESTSXX_MALLOC_FAIL_HH_
-#define TESTSXX_MALLOC_FAIL_HH_
+#include "mpdecimal.h"
 
+#include <stdbool.h>
+#include <stdio.h>
 
-namespace test {
+extern int alloc_count;
+extern int alloc_fail;
+extern int alloc_idx;
 
-#ifdef CONFIG_32
-extern thread_local size_t ulimit;
+void mpd_init_alloc(bool custom_alloc, bool check_alloc);
+
+#ifdef MPD_CONFIG_32
+void mpd_set_alloc_limit(size_t size);
 #endif
 
-void init_alloc_fail(void);
-void set_alloc_fail(decimal::Context &ctx, uint64_t n);
-void set_alloc(decimal::Context &ctx);
-
-}  /* namespace test */
+void mpd_set_alloc(mpd_context_t *ctx);
+void mpd_set_alloc_count(mpd_context_t *ctx);
+void mpd_set_alloc_fail(mpd_context_t *ctx);
 
 
-#endif  /* TESTSXX_MALLOC_FAIL_HH_ */
+#endif /* TESTS_H_ */

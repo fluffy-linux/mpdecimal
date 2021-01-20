@@ -46,8 +46,8 @@
 
 #include "mpdecimal.h"
 
-#include "common.hh"
 #include "decimal.hh"
+#include "test.hh"
 #include "vctest.hh"
 
 
@@ -110,22 +110,24 @@ using decimal::MallocError;
 
 using decimal::Decimal;
 
+using decimal::util::safe_downcast;
 
-namespace test {
+using test::Failure;
+
 
 /******************************************************************************/
 /*            Default Python context (for some generated test cases)          */
 /******************************************************************************/
 
-const Context pycontext{ 28, 999999, -999999, ROUND_HALF_EVEN,
-                         DecIEEEInvalidOperation | DecDivisionByZero | DecOverflow,
-                         0, 0 };
+static const Context pycontext{ 28, 999999, -999999, ROUND_HALF_EVEN,
+                                DecIEEEInvalidOperation | DecDivisionByZero | DecOverflow,
+                                0, 0 };
 
 /******************************************************************************/
 /*                            Exception hierarchy                             */
 /******************************************************************************/
 
-void
+static void
 ExceptionHierarchyTest()
 {
     assertEqual(context, context_template);
@@ -155,7 +157,7 @@ ExceptionHierarchyTest()
 /*                          IEEE interchange contexts                         */
 /******************************************************************************/
 
-void
+static void
 IEEEContextTest()
 {
     assertEqual(context, context_template);
@@ -206,7 +208,7 @@ IEEEContextTest()
 /*                              Context get/set                               */
 /******************************************************************************/
 
-void
+static void
 ContextGetSetTest()
 {
     assertEqual(context, context_template);
@@ -268,7 +270,7 @@ ContextGetSetTest()
 /*                          Context input validation                          */
 /******************************************************************************/
 
-void
+static void
 ContextInputValidationTest()
 {
     assertEqual(context, context_template);
@@ -314,7 +316,7 @@ ContextInputValidationTest()
 /*                                Small context                               */
 /******************************************************************************/
 
-void
+static void
 SmallContextTest()
 {
     assertEqual(context, context_template);
@@ -405,7 +407,7 @@ SmallContextTest()
 /*                           Context representation                           */
 /******************************************************************************/
 
-void
+static void
 ContextReprTest()
 {
     assertEqual(context, context_template);
@@ -429,7 +431,7 @@ ContextReprTest()
     auto s = context.repr();
     assertEqualStr(s, t);
 
-    s = str(context);
+    s = test::str(context);
     assertEqualStr(s, t);
 }
 
@@ -437,7 +439,7 @@ ContextReprTest()
 /*                          Exact conversions (default)                       */
 /******************************************************************************/
 
-const char *large_prec[] = {
+static const char *large_prec[] = {
 /* int */
 "12345678901234567890123456789012345678901234567890123456789012345678901234567890"
 "1234567890123456789012345678901234567890",
@@ -480,7 +482,7 @@ const char *large_prec[] = {
 };
 
 template<class T>
-void
+static void
 signed_construction()
 {
     const T min = std::numeric_limits<T>::min();
@@ -501,7 +503,7 @@ signed_construction()
     for (int n = 0; n < std::numeric_limits<T>::digits; n++) {
         for (const T& sign : signs) {
             for (T x = -5; x < 5;  x++) {
-                const T i = sign * (((T)1 << n) + x);
+                const T i = static_cast<T>(sign * ((static_cast<T>(1) << n) + x));
                 const Decimal d = {i};
                 assertEqual(d, i);
                 assertEqual(i, d);
@@ -511,7 +513,7 @@ signed_construction()
 }
 
 template<class T>
-void
+static void
 unsigned_construction()
 {
     const T max = std::numeric_limits<T>::max();
@@ -529,7 +531,7 @@ unsigned_construction()
 
     for (int n = 0; n < std::numeric_limits<T>::digits; n++) {
         for (T x = 0; x < 5;  x++) {
-            const T i = ((T)1 << n) + x;
+            const T i = static_cast<T>((static_cast<T>(1) << n) + x);
             const Decimal d = {i};
             assertEqual(d, i);
             assertEqual(i, d);
@@ -537,7 +539,7 @@ unsigned_construction()
     }
 }
 
-void
+static void
 ExactConstructionTest()
 {
     assertEqual(context, context_template);
@@ -669,7 +671,7 @@ ExactConstructionTest()
 /******************************************************************************/
 
 template<class T>
-void
+static void
 signed_construction_ctx(Context& ctx)
 {
     const T min = std::numeric_limits<T>::min();
@@ -697,7 +699,7 @@ signed_construction_ctx(Context& ctx)
 }
 
 template<class T>
-void
+static void
 unsigned_construction_ctx(Context& ctx)
 {
     const T v = std::numeric_limits<T>::max();
@@ -721,7 +723,7 @@ unsigned_construction_ctx(Context& ctx)
     ctx.clear_traps();
 }
 
-void
+static void
 InexactConstructionTest()
 {
     assertEqual(context, context_template);
@@ -851,7 +853,7 @@ InexactConstructionTest()
 /*                         Exceptions during construction                     */
 /******************************************************************************/
 
-void
+static void
 ConstructionExceptionTest()
 {
     assertEqual(context, context_template);
@@ -906,7 +908,7 @@ ConstructionExceptionTest()
 /*                                  Accessors                                 */
 /******************************************************************************/
 
-void
+static void
 AccessorTest()
 {
     assertEqual(context, context_template);
@@ -980,7 +982,7 @@ AccessorTest()
 /******************************************************************************/
 
 template <class T>
-void
+static void
 signed_assignment()
 {
     const T min = std::numeric_limits<T>::min();
@@ -1009,7 +1011,7 @@ signed_assignment()
 }
 
 template <class T>
-void
+static void
 unsigned_assignment()
 {
     const T max = std::numeric_limits<T>::max();
@@ -1036,7 +1038,7 @@ unsigned_assignment()
     }
 }
 
-void
+static void
 AssignmentOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1089,7 +1091,7 @@ AssignmentOperatorTest()
     unsigned_assignment<uint64_t>();
 }
 
-void
+static void
 PointerAssignmentOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1101,20 +1103,21 @@ PointerAssignmentOperatorTest()
     assertEqual(x, d);
 
     x += 10;
-    assertEqual((uintptr_t)x, ((uintptr_t)d) + 10 * (sizeof *d));
+    assertEqual(reinterpret_cast<uintptr_t>(x), reinterpret_cast<uintptr_t>(d) + 10 * (sizeof *d));
 
     x -= 10;
-    assertEqual((uintptr_t)x, ((uintptr_t)d));
+    assertEqual(reinterpret_cast<uintptr_t>(x), reinterpret_cast<uintptr_t>(d));
 
     delete x;
 }
+
 
 /******************************************************************************/
 /*                             Comparison operators                           */
 /******************************************************************************/
 
 template<class T>
-void
+static void
 signed_comparison()
 {
     const T min = std::numeric_limits<T>::min();
@@ -1152,7 +1155,7 @@ signed_comparison()
 }
 
 template<class T>
-void
+static void
 unsigned_comparison()
 {
     const T max = std::numeric_limits<T>::max();
@@ -1188,7 +1191,7 @@ unsigned_comparison()
     }
 }
 
-void
+static void
 ComparisonOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1262,7 +1265,7 @@ ComparisonOperatorTest()
     assertEqual(context.status(), DecInvalidOperation);
 }
 
-void
+static void
 PointerComparisonOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1285,7 +1288,7 @@ PointerComparisonOperatorTest()
 /*                          Unary arithmetic operators                        */
 /******************************************************************************/
 
-void
+static void
 UnaryOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1295,7 +1298,7 @@ UnaryOperatorTest()
     assertEqualStr(-Decimal(10000), "-1.00E+4");
 }
 
-void
+static void
 PointerUnaryOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1332,7 +1335,7 @@ PointerUnaryOperatorTest()
 /******************************************************************************/
 
 template <class T>
-void
+static void
 signed_arithmetic()
 {
     const T min = std::numeric_limits<T>::min();
@@ -1358,7 +1361,7 @@ signed_arithmetic()
 }
 
 template <class T>
-void
+static void
 unsigned_arithmetic()
 {
     const T max = std::numeric_limits<T>::max();
@@ -1382,7 +1385,7 @@ unsigned_arithmetic()
     }
 }
 
-void
+static void
 ArithmeticOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1422,7 +1425,7 @@ ArithmeticOperatorTest()
     unsigned_arithmetic<uint64_t>();
 }
 
-void
+static void
 PointerArithmeticOperatorTest()
 {
     assertEqual(context, context_template);
@@ -1431,10 +1434,10 @@ PointerArithmeticOperatorTest()
     assertTrue(d->issnan());
 
     const Decimal *x = d + 10;
-    assertEqual((uintptr_t)x, ((uintptr_t)d) + 10 * (sizeof *d));
+    assertEqual(reinterpret_cast<uintptr_t>(x), reinterpret_cast<uintptr_t>(d) + 10 * (sizeof *d));
 
     x = x - 10;
-    assertEqual((uintptr_t)x, ((uintptr_t)d));
+    assertEqual(reinterpret_cast<uintptr_t>(x), reinterpret_cast<uintptr_t>(d));
 
     delete d;
 }
@@ -1443,7 +1446,7 @@ PointerArithmeticOperatorTest()
 /*                                  Predicates                                */
 /******************************************************************************/
 
-void
+static void
 PredicateTest()
 {
     assertEqual(context, context_template);
@@ -1557,7 +1560,7 @@ PredicateTest()
 /*                              Unary functions                               */
 /******************************************************************************/
 
-void
+static void
 UnaryFunctionTest()
 {
     assertEqual(context, context_template);
@@ -1597,7 +1600,7 @@ UnaryFunctionTest()
     context.prec(9);
 
     /* Unary functions, optional context arg */
-    Context ctx = {1, 1, -1};
+    Context ctx{1, 1, -1};
 
     assertEqualStr(Decimal("-0.00001").number_class(), "-Normal");
     assertEqualStr(Decimal("-0.00001").number_class(ctx), "-Subnormal");
@@ -1655,7 +1658,7 @@ UnaryFunctionTest()
     assertRaises(Inexact, [&](){ Decimal("999.9").to_integral_exact(ctx); });
 }
 
-void
+static void
 CeilTest()
 {
     assertEqual(context, context_template);
@@ -1690,7 +1693,7 @@ CeilTest()
     assertEqual(context.status(), DecInvalidOperation);
 }
 
-void
+static void
 FloorTest()
 {
     assertEqual(context, context_template);
@@ -1725,7 +1728,7 @@ FloorTest()
     assertEqual(context.status(), DecInvalidOperation);
 }
 
-void
+static void
 TruncTest()
 {
     assertEqual(context, context_template);
@@ -1757,7 +1760,7 @@ TruncTest()
     for (int i = -250; i < 250; i++) {
         int n = snprintf(buf, sizeof buf, "%0.2f", i / 100.0);
         assertTrue(n >= 0 && n < 10);
-        Decimal d = Decimal((const char *)buf);
+        Decimal d = Decimal(static_cast<const char *>(buf));
         Decimal r = d.to_integral();
         assertEqual(d.trunc(), r);
     }
@@ -1775,7 +1778,7 @@ TruncTest()
 /*                              Binary functions                              */
 /******************************************************************************/
 
-void
+static void
 BinaryFunctionTest()
 {
     assertEqual(context, context_template);
@@ -1875,7 +1878,7 @@ BinaryFunctionTest()
 /*                                   Divmod                                   */
 /******************************************************************************/
 
-void
+static void
 DivmodTest()
 {
     assertEqual(context, context_template);
@@ -1935,7 +1938,7 @@ DivmodTest()
 /*                                  Quantize                                  */
 /******************************************************************************/
 
-void
+static void
 QuantizeTest()
 {
     assertEqual(context, context_template);
@@ -1961,7 +1964,7 @@ QuantizeTest()
 /*                              Ternary functions                             */
 /******************************************************************************/
 
-void
+static void
 TernaryFunctionTest()
 {
     assertEqual(context, context_template);
@@ -1986,7 +1989,7 @@ TernaryFunctionTest()
 /*                             Irregular functions                            */
 /******************************************************************************/
 
-void
+static void
 IrregularFunctionTest()
 {
     assertEqual(context, context_template);
@@ -2070,7 +2073,7 @@ IrregularFunctionTest()
 /*                                   Apply                                    */
 /******************************************************************************/
 
-void
+static void
 ApplyTest()
 {
     assertEqual(context, context_template);
@@ -2100,7 +2103,7 @@ ApplyTest()
 /*                             Integer conversion                             */
 /******************************************************************************/
 
-void
+static void
 IntegerConversionTest()
 {
     assertEqual(context, context_template);
@@ -2146,7 +2149,7 @@ IntegerConversionTest()
 /*                              Exact arithmetic                              */
 /******************************************************************************/
 
-void
+static void
 ExactArithTest()
 {
     assertEqual(context, context_template);
@@ -2170,19 +2173,19 @@ ExactArithTest()
 /*                        Containers and data structures                      */
 /******************************************************************************/
 
-void
-DataStructures(void)
+static void
+DataStructuresTest(void)
 {
     assertEqual(context, context_template);
 
     /* array */
     Decimal *x = new Decimal[10]();
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertTrue(x[i].issnan());
         x[i] = i;
     }
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertEqual(x[i], i);
     }
 
@@ -2191,15 +2194,15 @@ DataStructures(void)
     /* array of pointers */
     Decimal **y = new Decimal *[10];
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         y[i] = new Decimal();
         assertTrue((*y[i]).issnan());
         *y[i] = i;
     }
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertEqual(*y[i], i);
     }
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         delete y[i];
     }
 
@@ -2208,11 +2211,11 @@ DataStructures(void)
     /* linked list */
     std::list<Decimal> lst;
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         lst.push_front(Decimal(i));
     }
     lst.sort();
-    int n = 0;
+    size_t n = 0;
     for (const Decimal& d : lst) {
         assertEqual(d, n++);
     }
@@ -2241,8 +2244,8 @@ DataStructures(void)
     }
 }
 
-void
-LargeDataStructures(void)
+static void
+LargeDataStructuresTest(void)
 {
     assertEqual(context, context_template);
 
@@ -2251,18 +2254,18 @@ LargeDataStructures(void)
     context.prec(10000);
     context.traps(DecMaxStatus);
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         powers[i] = Decimal(i).pow(2100);
     }
 
     /* array */
     Decimal *x = new Decimal[10]();
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertTrue(x[i].issnan());
         x[i] = powers[i];
     }
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertEqual(x[i], powers[i]);
     }
 
@@ -2271,15 +2274,15 @@ LargeDataStructures(void)
     /* array of pointers */
     Decimal **y = new Decimal *[10];
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         y[i] = new Decimal();
         assertTrue((*y[i]).issnan());
         *y[i] = powers[i];
     }
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertEqual(*y[i], powers[i]);
     }
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         delete y[i];
     }
 
@@ -2288,11 +2291,11 @@ LargeDataStructures(void)
     /* linked list */
     std::list<Decimal> lst;
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         lst.push_front(powers[i]);
     }
     lst.sort();
-    int n = 0;
+    size_t n = 0;
     for (const Decimal& d : lst) {
         assertEqual(d, powers[n++]);
     }
@@ -2301,22 +2304,22 @@ LargeDataStructures(void)
     std::map<const char *, Decimal> map1;
     std::vector<const char *> keys = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         map1[keys[i]] = powers[i];
     }
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertEqual(map1.at(keys[i]), powers[i]);
     }
 
     std::map<Decimal, Decimal> map2;
     std::vector<const char *> values = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         map2[Decimal(values[i])] = powers[i];
     }
 
-    for (int i = 0; i < 10; i++) {
+    for (size_t i = 0; i < 10; i++) {
         assertEqual(map2.at(Decimal(values[i])), powers[i]);
     }
 }
@@ -2325,7 +2328,7 @@ LargeDataStructures(void)
 /*                               String and repr                              */
 /******************************************************************************/
 
-void
+static void
 StringReprTest()
 {
     assertEqual(context, context_template);
@@ -2350,7 +2353,7 @@ StringReprTest()
 /*                                   Format                                   */
 /******************************************************************************/
 
-void
+static void
 FormatTest()
 {
     assertEqual(context, context_template);
@@ -2519,66 +2522,78 @@ struct test_case {
     void (*f)(void);
 };
 
-const size_t NUM_TESTS = 35;
-const std::array<struct test_case, NUM_TESTS> test_cases {
+static const size_t NUM_TESTS = 35;
+static const std::array<struct test_case, NUM_TESTS> test_cases {
   {
     /* Context tests */
-    { "ExceptionHierarchyTest",        test::ExceptionHierarchyTest },
-    { "IEEEContextTest",               test::IEEEContextTest },
-    { "ContextGetSetTest",             test::ContextGetSetTest },
-    { "ContextInputValidationTest",    test::ContextInputValidationTest },
-    { "SmallContextTest",              test::SmallContextTest },
-    { "ContextReprTest",               test::ContextReprTest },
+    { "ExceptionHierarchyTest",        ExceptionHierarchyTest },
+    { "IEEEContextTest",               IEEEContextTest },
+    { "ContextGetSetTest",             ContextGetSetTest },
+    { "ContextInputValidationTest",    ContextInputValidationTest },
+    { "SmallContextTest",              SmallContextTest },
+    { "ContextReprTest",               ContextReprTest },
 
     /* Decimal tests */
-    { "ExactConstructionTest",         test::ExactConstructionTest },
-    { "InexactConstructionTest",       test::InexactConstructionTest },
-    { "ConstructionExceptionTest",     test::ConstructionExceptionTest },
+    { "ExactConstructionTest",         ExactConstructionTest },
+    { "InexactConstructionTest",       InexactConstructionTest },
+    { "ConstructionExceptionTest",     ConstructionExceptionTest },
 
-    { "AccessorTest",                  test::AccessorTest },
+    { "AccessorTest",                  AccessorTest },
 
-    { "UnaryOperatorTest",             test::UnaryOperatorTest },
-    { "PointerUnaryOperatorTest",      test::PointerUnaryOperatorTest },
+    { "UnaryOperatorTest",             UnaryOperatorTest },
+    { "PointerUnaryOperatorTest",      PointerUnaryOperatorTest },
 
-    { "ComparisonOperatorTest",        test::ComparisonOperatorTest },
-    { "PointerComparisonOperatorTest", test::PointerComparisonOperatorTest },
+    { "ComparisonOperatorTest",        ComparisonOperatorTest },
+    { "PointerComparisonOperatorTest", PointerComparisonOperatorTest },
 
-    { "AssignmentOperatorTest",        test::AssignmentOperatorTest },
-    { "PointerAssignmentOperatorTest", test::PointerAssignmentOperatorTest },
+    { "AssignmentOperatorTest",        AssignmentOperatorTest },
+    { "PointerAssignmentOperatorTest", PointerAssignmentOperatorTest },
 
-    { "ArithmeticOperatorTest",        test::ArithmeticOperatorTest },
-    { "PointerArithmeticOperatorTest", test::PointerArithmeticOperatorTest },
+    { "ArithmeticOperatorTest",        ArithmeticOperatorTest },
+    { "PointerArithmeticOperatorTest", PointerArithmeticOperatorTest },
 
-    { "PredicateTest",                 test::PredicateTest },
-    { "UnaryFunctionTest",             test::UnaryFunctionTest },
+    { "PredicateTest",                 PredicateTest },
+    { "UnaryFunctionTest",             UnaryFunctionTest },
 
-    { "CeilTest",                      test::CeilTest },
-    { "FloorTest",                     test::FloorTest },
-    { "TruncTest",                     test::TruncTest },
+    { "CeilTest",                      CeilTest },
+    { "FloorTest",                     FloorTest },
+    { "TruncTest",                     TruncTest },
 
-    { "BinaryFunctionTest",            test::BinaryFunctionTest },
-    { "DivmodTest",                    test::DivmodTest },
-    { "QuantizeTest",                  test::QuantizeTest },
+    { "BinaryFunctionTest",            BinaryFunctionTest },
+    { "DivmodTest",                    DivmodTest },
+    { "QuantizeTest",                  QuantizeTest },
 
-    { "TernaryFunctionTest",           test::TernaryFunctionTest },
+    { "TernaryFunctionTest",           TernaryFunctionTest },
 
-    { "IrregularFunctionTest",         test::IrregularFunctionTest },
-    { "ApplyTest",                     test::ApplyTest },
+    { "IrregularFunctionTest",         IrregularFunctionTest },
+    { "ApplyTest",                     ApplyTest },
 
-    { "IntegerConversionTest",         test::IntegerConversionTest },
+    { "IntegerConversionTest",         IntegerConversionTest },
 
-    { "ExactArithTest",                test::ExactArithTest },
+    { "ExactArithTest",                ExactArithTest },
 
-    { "DataStructures",                test::DataStructures },
-    { "LargeDataStructures",           test::LargeDataStructures },
+    { "DataStructuresTest",            DataStructuresTest },
+    { "LargeDataStructuresTest",       LargeDataStructuresTest },
 
-    { "StringReprTest",                test::StringReprTest },
-    { "FormatTest",                    test::FormatTest },
+    { "StringReprTest",                StringReprTest },
+    { "FormatTest",                    FormatTest },
   }
 };
 
+static int
+exit_status(const std::vector<std::string>& status)
+{
+    for (auto p : status) {
+        if (p != "PASS") {
+            return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
 /* run a single function */
-void
+static void
 do_test(const struct test_case& t, std::vector<std::string>& status, size_t i)
 {
     try {
@@ -2591,24 +2606,26 @@ do_test(const struct test_case& t, std::vector<std::string>& status, size_t i)
 }
 
 /* process a function list */
-int
+static int
 do_tests(const std::array<struct test_case, NUM_TESTS>& tests)
 {
     const size_t n = tests.size();
     std::vector<std::string> status(n, "PASS");
 
     for (size_t i = 0; i < n; i++) {
-        std::cerr << tests[i].name << " ... " << std::flush;
+        std::cout << tests[i].name << " ... " << std::flush;
         do_test(tests[i], status, i);
         context = context_template;
-        std::cerr << status[i] << std::endl << std::flush;
+        std::cout << status[i] << "\n" << std::flush;
     }
+
+    std::cout << "\n" << std::flush;
 
     return exit_status(status);
 }
 
 /* process a file list, threaded */
-int
+static int
 do_tests_threaded(const std::array<struct test_case, NUM_TESTS>& tests)
 {
     const size_t n = tests.size();
@@ -2624,14 +2641,16 @@ do_tests_threaded(const std::array<struct test_case, NUM_TESTS>& tests)
     }
 
     for (size_t i = 0; i < n; i++) {
-        std::cerr << tests[i].name << " ... " << status[i] << std::endl << std::flush;
+        std::cout << tests[i].name << " ... " << status[i] << "\n" << std::flush;
     }
+
+    std::cout << "\n" << std::flush;
 
     return exit_status(status);
 }
 
 /* repeatedly process a randomized function list */
-int
+static int
 do_tests_repeat(const std::array<struct test_case, NUM_TESTS>& tests)
 {
     const size_t n = tests.size();
@@ -2661,7 +2680,7 @@ do_tests_repeat(const std::array<struct test_case, NUM_TESTS>& tests)
 }
 
 /* process a file list, threaded */
-int
+static int
 do_tests_threaded_repeat(const std::array<struct test_case, NUM_TESTS>& tests)
 {
     const size_t n = tests.size();
@@ -2694,8 +2713,6 @@ do_tests_threaded_repeat(const std::array<struct test_case, NUM_TESTS>& tests)
     return EXIT_SUCCESS;
 }
 
-}  /* namespace test */
-
 
 /*
  * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=77704
@@ -2703,75 +2720,85 @@ do_tests_threaded_repeat(const std::array<struct test_case, NUM_TESTS>& tests)
  * valgrind --tool=helgrind shows a data race in libstdc++. The race
  * disappears when streams are used before calling any threads.
  */
-void
+static void
 init_libc(void)
 {
     std::ostringstream ss;
     ss << 1;
 }
 
-void
+static void
 usage(void)
 {
-    std::cerr << "apitest: usage: apitest [--threaded] [--repeat]" << std::endl;
+    std::cerr << "apitest: usage: apitest [--custom] [--thread] [--repeat]" << std::endl;
     exit(EXIT_FAILURE);
 }
 
 int
-main(int argc, char **argv)
+main(int argc, char *argv[])
 {
-    bool threaded = false;
+    std::vector<std::string> args(argv + (argc!=0), argv + argc);
+    bool custom_alloc = false;
+    bool thread = false;
     bool repeat = false;
 
+    for (auto arg : args) {
+        if (!custom_alloc && arg == "--custom") {
+            custom_alloc = true;
+        }
+        else if (!thread && arg == "--thread") {
+            thread = true;
+        }
+        else if (!repeat && arg == "--repeat") {
+            repeat = true;
+        }
+        else {
+            usage();
+        }
+    }
+
+    /* Initialize streams (see above) */
     init_libc();
 
-    test::assertEqual(MPD_MINALLOC, decimal::MINALLOC);
+    /* Initialize custom allocation functions */
+    test::init_alloc(custom_alloc, /*check_alloc=*/false);
 
-    context_template = context = Context(9, 999999, -999999, ROUND_HALF_EVEN, 0, 0, 0);
+    /* Initialize context template */
+    context_template = Context(9, 999999, -999999, ROUND_HALF_EVEN, 0, 0, 0);
 
-    if (argc == 1) {
-        ;
+    /* Initialize context for the main thread */
+    context = context_template;
+
+    /* Check version numbers */
+    static_assert(MPD_MAJOR_VERSION == 2, "MPD_MAJOR_VERSION must be 2");
+    static_assert(MPD_MINOR_VERSION == 5, "MPD_MINOR_VERSION must be 5");
+    static_assert(MPD_MICRO_VERSION == 1, "MPD_MICRO_VERSION must be 1");
+
+    if (mpd_version() != std::string("2.5.1")) {
+        err_exit("mpd_version() != 2.5.1");
     }
-    else if (argc == 2) {
-        if (std::string(argv[1]) == "--threaded") {
-            threaded = true;
-        }
-        else if (std::string(argv[1]) == "--repeat") {
-            repeat = true;
-        }
-        else {
-            usage();
-        }
-    }
-    else if (argc == 3) {
-        if (std::string(argv[1]) == "--threaded" && std::string(argv[2]) == "--repeat" ) {
-            threaded = true;
-            repeat = true;
-        }
-        else {
-            usage();
-        }
-    }
-    else {
-        usage();
+    if (MPD_VERSION != std::string("2.5.1")) {
+        err_exit("MPD_VERSION != 2.5.1");
     }
 
-    srand((unsigned int)time(NULL));
+    /* Check fundamental libmpdec++ invariant */
+    assertEqual(MPD_MINALLOC, decimal::MINALLOC);
 
-    if (threaded) {
+
+    if (thread) {
         if (repeat) {
-            return test::do_tests_threaded_repeat(test::test_cases);
+            return do_tests_threaded_repeat(test_cases);
         }
         else {
-            return test::do_tests_threaded(test::test_cases);
+            return do_tests_threaded(test_cases);
         }
     }
     else {
         if (repeat) {
-            return test::do_tests_repeat(test::test_cases);
+            return do_tests_repeat(test_cases);
         }
         else {
-            return test::do_tests(test::test_cases);
+            return do_tests(test_cases);
         }
     }
 }
