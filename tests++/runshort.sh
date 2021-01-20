@@ -1,59 +1,59 @@
 #!/bin/sh
 
 
-# malloc() on OS X does not conform to the C standard.
+PORTABLE_PWD=`pwd`
+
+THREAD="--thread" # std::thread
+
 SYSTEM=`uname -s`
 case $SYSTEM in
     darwin*|Darwin*)
+        # malloc() on OS X does not conform to the C standard.
         export MallocLogFile=/dev/null
         export MallocDebugReport=crash
+        ;;
+    AIX)
+        # The thread stack size on AIX (96K) makes std::thread unusable
+        # for runtest.cc, which needs around 300K.
+        THREAD="--pthread"
         ;;
     *)
         ;;
 esac
 
+
 # Download or copy the official test cases (text files).
-./gettests.sh || exit 1
+./gettests.sh "$1" || exit 1
 
 
 printf "\n# ========================================================================\n"
 printf "#                        libmpdec++: static library\n"
 printf "# ========================================================================\n\n"
 
-printf "Running official tests ...\n\n"
+if [ x"$1" != x"--local" ]; then
+    printf "Running official tests ...\n\n"
 
-if  ! ./runtest official.topTest --threaded; then
-    printf "\nFAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
+    ./runtest official.topTest $THREAD || { printf "\nFAIL\n\n\n"; exit 1; }
 fi
+
 
 printf "Running additional tests ...\n\n"
 
-if ! ./runtest additional.topTest --threaded; then
-    printf "\nFAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
-fi
+./runtest additional.topTest $THREAD || { printf "\nFAIL\n\n\n"; exit 1; }
+
 
 printf "Running API tests (single thread) ... \n\n"
 
-if ! ./apitest; then
-    printf "FAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
-fi
+./apitest || { printf "\nFAIL\n\n\n"; exit 1; }
+
 
 printf "Running API tests (threaded) ... \n\n"
 
-if ! ./apitest --threaded; then
-    printf "FAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
+./apitest --thread || { printf "\nFAIL\n\n\n"; exit 1; }
+
+
+if [ ! -f ./runtest_shared ]; then
+    exit 0
 fi
 
 
@@ -61,41 +61,31 @@ printf "\n# ====================================================================
 printf "#                        libmpdec++: shared library\n"
 printf "# ========================================================================\n\n"
 
-printf "Running official tests ...\n\n"
+LD_LIBRARY_PATH="$PORTABLE_PWD/../libmpdec:$PORTABLE_PWD/../libmpdec++"
+LD_32_LIBRARY_PATH="$PORTABLE_PWD/../libmpdec:$PORTABLE_PWD/../libmpdec++"
+export LD_LIBRARY_PATH
+export LD_32_LIBRARY_PATH
 
-export LD_LIBRARY_PATH="$PWD/../libmpdec:$PWD/../libmpdec++"
-export LD_32_LIBRARY_PATH="$PWD/../libmpdec:$PWD/../libmpdec++"
 
-if  ! ./runtest_shared official.topTest --threaded; then
-    printf "\nFAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
+if [ x"$1" != x"--local" ]; then
+    printf "Running official tests ...\n\n"
+
+    ./runtest_shared official.topTest $THREAD || { printf "\nFAIL\n\n\n"; exit 1; }
 fi
+
 
 printf "Running additional tests ...\n\n"
 
-if ! ./runtest_shared additional.topTest --threaded; then
-    printf "\nFAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
-fi
+./runtest_shared additional.topTest $THREAD || { printf "\nFAIL\n\n\n"; exit 1; }
+
 
 printf "Running API tests (single thread) ... \n\n"
 
-if ! ./apitest_shared; then
-    printf "FAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
-fi
+./apitest_shared || { printf "\nFAIL\n\n\n"; exit 1; }
+
 
 printf "Running API tests (threaded) ... \n\n"
 
-if ! ./apitest_shared --threaded; then
-    printf "FAIL\n\n\n"
-    exit 1
-else
-    printf "\n"
-fi
+./apitest_shared --thread || { printf "\nFAIL\n\n\n"; exit 1; }
+
+

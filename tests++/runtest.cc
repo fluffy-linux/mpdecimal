@@ -26,6 +26,17 @@
  */
 
 
+#ifdef _AIX
+  #define __STDC_FORMAT_MACROS
+#endif
+
+#ifndef _MSC_VER
+  #include "config.h"
+  #ifdef HAVE_PTHREAD_H
+    #include <pthread.h>
+  #endif
+#endif
+
 #include <cctype>
 #include <cerrno>
 #include <cinttypes>
@@ -34,21 +45,23 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 
-#include "malloc_fail.hh"
 #include "mpdecimal.h"
 
-#include "common.hh"
 #include "decimal.hh"
+#include "test.hh"
+#include "vctest.hh"
 
 
 using decimal::ValueError;
@@ -60,17 +73,23 @@ using decimal::Context;
 using decimal::context_template;
 using decimal::context;
 
+using decimal::util::safe_downcast;
 
-namespace test {
+#if defined(MPD_CONFIG_32)
+using test::set_alloc_limit;
+#endif
+using test::set_alloc;
+using test::set_alloc_fail;
+
 
 enum skip_cmp {SKIP_NONE, SKIP_NAN, SKIP_NONINT};
 
-const mpd_context_t readcontext {
-#if defined(CONFIG_64)
+static const mpd_context_t readcontext {
+#if defined(MPD_CONFIG_64)
   1070000000000000000,   /* prec */
   1070000000000000000,   /* emax */
   -1070000000000000000,  /* emin */
-#elif defined(CONFIG_32)
+#elif defined(MPD_CONFIG_32)
   /* These ranges are needed for the official testsuite
    * and are generally not problematic at all. */
   1070000000,            /* prec */
@@ -87,12 +106,12 @@ const mpd_context_t readcontext {
   1,                     /* allcr */
 };
 
-const mpd_context_t testcontext {
-#if defined(CONFIG_64)
+static const mpd_context_t testcontext {
+#if defined(MPD_CONFIG_64)
   999999999,               /* prec */
   MPD_MAX_EMAX,            /* emax */
   MPD_MIN_EMIN,            /* emin */
-#elif defined(CONFIG_32)
+#elif defined(MPD_CONFIG_32)
   /* These ranges are needed for the official testsuite
    * and are generally not problematic at all. */
   999999999,               /* prec */
@@ -122,7 +141,7 @@ struct status_diff {
     uint32_t expected;
 };
 
-const struct result_diff ulp_cases[] {
+static const struct result_diff ulp_cases[] {
     /* Cases where the result is allowed to differ by less than one ULP.
      * Only needed if ctx->allcr is 0. */
     { "expx013", "1.001000", "1.001001" },
@@ -134,12 +153,12 @@ const struct result_diff ulp_cases[] {
     { "expx352", "1.0000000", "1.0000001" },
 };
 
-const struct status_diff status_cases[] {
+static const struct status_diff status_cases[] {
     /* With a reduced working precision in mpd_qpow() the status matches. */
     { "pwsx803", MPD_Inexact|MPD_Rounded|MPD_Subnormal|MPD_Underflow, MPD_Inexact|MPD_Rounded },
 };
 
-const char *skipit[] {
+static const char *skipit[] {
     /* NULL reference, decimal16, decimal32, or decimal128 */
     "absx900",
     "addx9990",
@@ -348,7 +367,7 @@ const char *skipit[] {
     "pwmx326",
 };
 
-mpd_ssize_t
+static mpd_ssize_t
 strtossize(const char *s, char **end, int base)
 {
     int64_t retval;
@@ -362,15 +381,23 @@ strtossize(const char *s, char **end, int base)
         return (retval < 0) ? MPD_SSIZE_MIN : MPD_SSIZE_MAX;
     }
 
-    return (mpd_ssize_t)retval;
+    return static_cast<mpd_ssize_t>(retval);
 }
 
-void
+static uint64_t
+rnd(void)
+{
+    static thread_local std::mt19937_64 r(time(nullptr));
+
+    return r();
+}
+
+static void
 mpd_init_rand(Decimal &x)
 {
     Context maxcontext{readcontext};
-    long r = random() % 100;
-    uint8_t sign = random() % 2;
+    uint64_t r = rnd() % 100;
+    uint8_t sign = rnd() % 2;
 
     if (r >= 80) {
         x = Decimal("-1111111111e20200", maxcontext);
@@ -390,7 +417,7 @@ mpd_init_rand(Decimal &x)
     }
 }
 
-bool
+static bool
 skip_test(const std::string& id)
 {
     const auto& loc = std::find(std::begin(skipit), std::end(skipit), id);
@@ -401,13 +428,13 @@ skip_test(const std::string& id)
     return false;
 }
 
-bool
+static bool
 startswith(const std::string& s, const char *prefix)
 {
     return strncasecmp(s.c_str(), prefix, strlen(prefix)) == 0;
 }
 
-bool
+static bool
 endswith(const std::string& s, const char *suffix)
 {
     std::string rs(s);
@@ -417,19 +444,19 @@ endswith(const std::string& s, const char *suffix)
     return startswith(rs, prefix.c_str());
 }
 
-bool
+static bool
 eqtoken(const std::string& tok, const char *s)
 {
     return strcasecmp(tok.c_str(), s) == 0;
 }
 
-bool
+static bool
 istokchar(unsigned char c)
 {
     return std::isalnum(c) || (std::ispunct(c) && c != '"' && c != '\'');
 }
 
-int
+static int
 nexttoken(std::string::const_iterator& start,
           std::string::const_iterator& end,
           std::string::const_iterator& next_start,
@@ -438,8 +465,8 @@ nexttoken(std::string::const_iterator& start,
     end = next_start;
 
     for (; end != nul; end++) {
-        if (isspace((unsigned char)*end)) {
-            ;
+        if (isspace(static_cast<unsigned char>(*end))) {
+            /* empty */
         }
         else if (*end == '-' && (end+1) != nul && *(end+1) == '-') {
             start = end = next_start = nul;
@@ -478,10 +505,10 @@ nexttoken(std::string::const_iterator& start,
         else {
             start = end;
             for (; end != nul; end++) {
-                if (std::isspace((unsigned char)*end)) {
+                if (std::isspace(static_cast<unsigned char>(*end))) {
                     break;
                 }
-                if (!istokchar(*end)) {
+                if (!istokchar(static_cast<unsigned char>(*end))) {
                     return -1;
                 }
             }
@@ -495,7 +522,7 @@ nexttoken(std::string::const_iterator& start,
 }
 
 /* split a line into tokens */
-std::vector<std::string>
+static std::vector<std::string>
 split(const std::string& line)
 {
     std::string::const_iterator start = line.begin();
@@ -521,8 +548,8 @@ split(const std::string& line)
 }
 
 /* returns all expected conditions in a status flag */
-uint32_t
-scan_conditions(const std::vector<std::string>& token, const int n)
+static uint32_t
+scan_conditions(const std::vector<std::string>& token, const size_t n)
 {
     uint32_t status = 0;
 
@@ -582,7 +609,7 @@ scan_conditions(const std::vector<std::string>& token, const int n)
     return status;
 }
 
-void
+static void
 compare_expected(const std::vector<std::string>& token,
                  const std::string& calc,
                  const std::string& expected,
@@ -615,14 +642,14 @@ compare_expected(const std::vector<std::string>& token,
         char ctxstatus[MPD_MAX_FLAG_STRING];
         char expstatus[MPD_MAX_FLAG_STRING];
 
-        mpd_snprint_flags(ctxstatus, MPD_MAX_FLAG_STRING, ctx.status()),
+        mpd_snprint_flags(ctxstatus, MPD_MAX_FLAG_STRING, ctx.status());
         mpd_snprint_flags(expstatus, MPD_MAX_FLAG_STRING, expected_status);
 
         err_token(token, "calc: [", ctxstatus, "] expected: [",  expstatus, "]");
     }
 }
 
-bool
+static bool
 equalmem(const Decimal& x, const Decimal& y)
 {
     const mpd_t *a = x.getconst();
@@ -644,7 +671,7 @@ equalmem(const Decimal& x, const Decimal& y)
     return true;
 }
 
-void
+static void
 check_equalmem(const std::vector<std::string>& token, const Decimal& a, const Decimal& b)
 {
     if (!equalmem(a, b)) {
@@ -652,18 +679,18 @@ check_equalmem(const std::vector<std::string>& token, const Decimal& a, const De
     }
 }
 
-unsigned long
+static unsigned long
 get_testno(const std::vector<std::string>& token)
 {
     const char *number = strpbrk(token.at(0).c_str(), "0123456789");
-    if (number == NULL) {
+    if (number == nullptr) {
         err_token(token, "invalid test id: ", token.at(0));
     }
-    return strtoul(number, NULL, 10);
+    return strtoul(number, nullptr, 10);
 }
 
 /* scan a single operand and the expected result */
-int
+static size_t
 scan_op_expected(Decimal& op,
                  std::string& expected,
                  const std::vector<std::string>& token,
@@ -674,11 +701,12 @@ scan_op_expected(Decimal& op,
         err_token(token, "expected '->' token");
     }
     expected = token.at(4);
+
     return 5;
 }
 
 /* scan decimal operand, string operand and the expected result */
-int
+static size_t
 scan_op_string_expected(Decimal& op1,
                         std::string& op2,
                         std::string& result,
@@ -691,11 +719,12 @@ scan_op_string_expected(Decimal& op1,
         err_token(token, "expected '->' token");
     }
     result = token.at(5);
+
     return 6;
 }
 
 /* scan two operands and the expected result */
-int
+static size_t
 scan_op_op_expected(Decimal& op1,
                     Decimal& op2,
                     std::string& result,
@@ -708,11 +737,12 @@ scan_op_op_expected(Decimal& op1,
         err_token(token, "expected '->' token");
     }
     result = token.at(5);
+
     return 6;
 }
 
 /* scan one operands and two results */
-int
+static size_t
 scan_op_expected_expected(Decimal& op1,
                           std::string& result1,
                           std::string& result2,
@@ -725,11 +755,12 @@ scan_op_expected_expected(Decimal& op1,
     }
     result1 = token.at(4);
     result2 = token.at(5);
+
     return 6;
 }
 
 /* scan two operands and two results */
-int
+static size_t
 scan_op_op_expected_expected(Decimal& op1,
                              Decimal& op2,
                              std::string& result1,
@@ -744,11 +775,12 @@ scan_op_op_expected_expected(Decimal& op1,
     }
     result1 = token.at(5);
     result2 = token.at(6);
+
     return 7;
 }
 
 /* scan three operands and the expected result */
-int
+static size_t
 scan_op_op_op_expected(Decimal& op1,
                        Decimal& op2,
                        Decimal& op3,
@@ -763,7 +795,64 @@ scan_op_op_op_expected(Decimal& op1,
         err_token(token, "expected '->' token");
     }
     result = token.at(6);
+
     return 7;
+}
+
+static void
+Triple(const std::vector<std::string>& token, const Decimal &dec, Context &ctx)
+{
+#ifdef MPD_CONFIG_32
+    /*
+     * 32-bit: as_triple() expects well-formed decimals. Skip test cases
+     * that use the extended exponent, which is safe in the tests but not
+     * in production.
+     */
+    if (!dec.isspecial()) {
+        if (dec.exponent() < MPD_MIN_ETINY || dec.exponent() > MPD_MAX_EMAX) {
+            return;
+        }
+    }
+#endif
+
+    mpd_uint128_triple_t triple = dec.as_uint128_triple();
+    switch (triple.tag) {
+    case MPD_TRIPLE_QNAN: case MPD_TRIPLE_SNAN:
+        DECIMAL_ASSERT(triple.exp == 0, token);
+        break;
+    case MPD_TRIPLE_INF:
+        DECIMAL_ASSERT(triple.hi == 0 && triple.lo == 0 && triple.exp == 0,
+                       token);
+        break;
+    case MPD_TRIPLE_NORMAL:
+        break;
+    case MPD_TRIPLE_ERROR:
+        DECIMAL_ASSERT(triple.sign == 0 && triple.hi == 0 &&
+                       triple.lo == 0 && triple.exp == 0,
+                       token);
+        return;
+    }
+
+    /* Allocation failures (only occur in Decimal(triple). */
+    Decimal d = 10;
+    for (uint64_t n = 1; n < UINT64_MAX-1; n++) {
+
+        set_alloc_fail(ctx, n);
+        try {
+            d = Decimal(triple);
+        }
+        catch (MallocError&) {
+            set_alloc(ctx);
+            DECIMAL_ASSERT(d == 10, token);
+            continue;
+        }
+
+        set_alloc(ctx);
+        break;
+    }
+
+    check_equalmem(token, d, dec);
+    DECIMAL_ASSERT(d.cmp_total(dec) == 0, token);
 }
 
 /*
@@ -771,10 +860,9 @@ scan_op_op_op_expected(Decimal& op1,
  * a maxcontext for the conversion of the operand.
  */
 typedef std::string (Decimal::*String_DecimalContext)(bool) const;
-void
+static void
 Str_DecCtx(const std::vector<std::string>& token,
-           String_DecimalContext func,
-           const bool generated=false)
+           String_DecimalContext func)
 {
     Context maxcontext{readcontext};
     Decimal op;
@@ -783,14 +871,14 @@ Str_DecCtx(const std::vector<std::string>& token,
     std::string expected_fail;
     std::string calc;
 
-    /* status should be set in conversion (unless we have generated tests from stdin) */
-    Context& workctx = generated ? maxcontext : context;
+    Context& workctx = context;
     workctx.status(0);
-    const int i = scan_op_expected(op, expected, token, workctx);
+    const size_t i = scan_op_expected(op, expected, token, workctx);
     const uint32_t expstatus = scan_conditions(token, i);
     if (expstatus != workctx.status()) {
         err_token(token, "op: ", op, " expstatus: ", expstatus, " got: ", workctx.status());
     }
+    Triple(token, op, workctx);
 
     /* Allocation failures for Decimal() */
     for (uint64_t n = 1; n < UINT64_MAX-1; n++) {
@@ -850,14 +938,18 @@ Str_DecCtx(const std::vector<std::string>& token,
     check_equalmem(token, tmp, op);
 }
 
+#ifdef __INTEL_COMPILER
+  #pragma warning(disable : 186)
+#endif
 /* Quick and dirty: parse hex escape sequences as printed in bytestring
  * output of Python3x. */
-std::string
+static std::string
 parse_escapes_backslash(const char *s)
 {
     char hex[5];
     char *result, *cp;
     unsigned int u;
+    unsigned char b;
     int n;
 
     std::shared_ptr<char> ptr(new char[strlen(s)+1], std::default_delete<char[]>());
@@ -875,7 +967,8 @@ parse_escapes_backslash(const char *s)
             }
             hex[n] = '\0';
             sscanf(hex, "%x%n", &u, &n);
-            *cp++ = static_cast<char>(u);
+            b = safe_downcast<unsigned char, unsigned int>(u);
+            *cp++ = static_cast<char>(b);
             s += n;
         }
         else {
@@ -887,7 +980,7 @@ parse_escapes_backslash(const char *s)
     return std::string(result);
 }
 
-std::string
+static std::string
 parse_escapes_hexstring(const char *s)
 {
     const std::string hex{s};
@@ -900,14 +993,15 @@ parse_escapes_hexstring(const char *s)
 
     for (size_t i = 0; i < len; i += 2) {
         std::string twodigits = hex.substr(i, 2);
-        unsigned char b = (unsigned char)strtoul(twodigits.c_str(), NULL, 16);
-        bytes.push_back((char)b);
+        const unsigned long ul = strtoul(twodigits.c_str(), nullptr, 16);
+        const unsigned char b = safe_downcast<unsigned char, unsigned long>(ul);
+        bytes.push_back(static_cast<char>(b));
     }
 
     return std::string(bytes.data(), bytes.size());
 }
 
-std::string
+static std::string
 parse_escapes(const char *s)
 {
     if (startswith(s, "HEX")) {
@@ -919,7 +1013,7 @@ parse_escapes(const char *s)
 }
 
 /* This function is used for Decimal::format. */
-void
+static void
 Fmt(const std::vector<std::string>& token)
 {
     Context maxcontext{readcontext};
@@ -927,8 +1021,9 @@ Fmt(const std::vector<std::string>& token)
     std::string fmt, expected;
     std::string calc;
 
-    const int i = scan_op_string_expected(op, fmt, expected, token, maxcontext);
+    const size_t i = scan_op_string_expected(op, fmt, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, i);
+    Triple(token, op, maxcontext);
 
     fmt = parse_escapes(fmt.c_str());
     expected = parse_escapes(expected.c_str());
@@ -944,6 +1039,9 @@ Fmt(const std::vector<std::string>& token)
         DECIMAL_ASSERT(expstatus == MPD_Invalid_operation, token);
         DECIMAL_ASSERT(context.status() == 0, token);
         check_equalmem(token, tmp, op);
+    #ifdef __mips__
+        return;
+    #endif
     }
 
     DECIMAL_ASSERT(expstatus == 0 || expstatus == MPD_Invalid_operation, token);
@@ -965,10 +1063,12 @@ Fmt(const std::vector<std::string>& token)
             set_alloc(context);
             continue;
         }
+    #ifndef __mips__ /* miscompilation */
         catch (ValueError&) {
             DECIMAL_ASSERT(expstatus == MPD_Invalid_operation, token);
             DECIMAL_ASSERT(context.status() == 0, token);
         }
+    #endif
 
         set_alloc(context);
         break;
@@ -981,15 +1081,16 @@ Fmt(const std::vector<std::string>& token)
     }
 }
 
-void
+static void
 Class(const std::vector<std::string>& token)
 {
     Context maxcontext{readcontext};
     Decimal op, tmp;
     std::string expected;
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     mpd_init_rand(tmp);
     tmp = op;
@@ -1003,7 +1104,7 @@ Class(const std::vector<std::string>& token)
 /* test a unary function */
 typedef Decimal (Decimal::*Decimal_Decimal)() const;
 
-void
+static void
 Dec_Dec_RunSingle(Decimal& result, Decimal& tmp,
                   const std::vector<std::string>& token,
                   const Decimal_Decimal func,
@@ -1011,7 +1112,7 @@ Dec_Dec_RunSingle(Decimal& result, Decimal& tmp,
                   const std::string& expected,
                   const uint32_t expstatus)
 {
-    int incr = 1;
+    uint64_t incr = 1;
     for (uint64_t n = 1; n < UINT64_MAX-100; n += incr) {
         mpd_init_rand(result);
         mpd_init_rand(tmp);
@@ -1028,7 +1129,7 @@ Dec_Dec_RunSingle(Decimal& result, Decimal& tmp,
             check_equalmem(token, result, save_result);
             check_equalmem(token, tmp, op);
             if (n > 50) {
-                incr = random() % 100 + 1;
+                incr = rnd() % 100 + 1;
             }
             continue;
         }
@@ -1044,15 +1145,16 @@ Dec_Dec_RunSingle(Decimal& result, Decimal& tmp,
     }
 }
 
-void
+static void
 Dec_Dec(const std::vector<std::string>& token, Decimal_Decimal func)
 {
     Context maxcontext{readcontext};
     Decimal op, result, tmp;
     std::string expected;
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     Dec_Dec_RunSingle(result, tmp, token, func, op, expected, expstatus);
     Dec_Dec_RunSingle(tmp, tmp, token, func, op, expected, expstatus);
@@ -1061,7 +1163,7 @@ Dec_Dec(const std::vector<std::string>& token, Decimal_Decimal func)
 /* test a unary function with an optional context argument */
 typedef Decimal (Decimal::*Decimal_DecimalContext)(Context&) const;
 
-void
+static void
 Dec_DecCtx_RunSingle(Decimal& result, Decimal& tmp,
                      const std::vector<std::string>& token,
                      const Decimal_DecimalContext func,
@@ -1069,7 +1171,7 @@ Dec_DecCtx_RunSingle(Decimal& result, Decimal& tmp,
                      const std::string& expected,
                      const uint32_t expstatus)
 {
-    int incr = 1;
+    uint64_t incr = 1;
     for (uint64_t n = 1; n < UINT64_MAX-100; n += incr) {
         mpd_init_rand(result);
         mpd_init_rand(tmp);
@@ -1086,7 +1188,7 @@ Dec_DecCtx_RunSingle(Decimal& result, Decimal& tmp,
             check_equalmem(token, result, save_result);
             check_equalmem(token, tmp, op);
             if (n > 50) {
-                incr = random() % 100 + 1;
+                incr = rnd() % 100 + 1;
             }
             continue;
         }
@@ -1102,30 +1204,33 @@ Dec_DecCtx_RunSingle(Decimal& result, Decimal& tmp,
     }
 }
 
-void
+static void
 Dec_DecCtx(const std::vector<std::string>& token, Decimal_DecimalContext func)
 {
     Context maxcontext{readcontext};
     Decimal op, result, tmp;
     std::string expected;
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     Dec_DecCtx_RunSingle(result, tmp, token, func, op, expected, expstatus);
     Dec_DecCtx_RunSingle(tmp, tmp, token, func, op, expected, expstatus);
 }
 
 /* Same as Dec_DecCtx, but quantize the operand before applying the actual function */
-void
+static void
 Dec_DecCtxWithQuantize(const std::vector<std::string>& token, Decimal_DecimalContext func)
 {
     Context maxcontext{readcontext};
     Decimal op, scale, result, tmp;
     std::string expected;
 
-    const int n = scan_op_op_expected(op, scale, expected, token, maxcontext);
+    const size_t n = scan_op_op_expected(op, scale, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
+    Triple(token, scale, maxcontext);
 
     op = op.quantize(scale, maxcontext);
 
@@ -1136,7 +1241,7 @@ Dec_DecCtxWithQuantize(const std::vector<std::string>& token, Decimal_DecimalCon
 /* Test a binary function */
 typedef Decimal (Decimal::*Decimal_DecimalDecimalContext)(const Decimal&, Context&) const;
 
-void
+static void
 resolve_status_hack(uint32_t& expstatus, const uint32_t status)
 {
     /* hack #1 to resolve disagreement with results generated by decimal.py */
@@ -1152,7 +1257,7 @@ resolve_status_hack(uint32_t& expstatus, const uint32_t status)
     }
 }
 
-void
+static void
 Dec_DecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2,
                         const std::vector<std::string>& token,
                         const Decimal_DecimalDecimalContext func,
@@ -1160,7 +1265,7 @@ Dec_DecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2,
                         const std::string& expected,
                         const uint32_t expstatus)
 {
-    int incr = 1;
+    uint64_t incr = 1;
     for (uint64_t n = 1; n < UINT64_MAX-100; n += incr) {
         mpd_init_rand(tmp1);
         mpd_init_rand(tmp2);
@@ -1179,7 +1284,7 @@ Dec_DecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2,
             check_equalmem(token, tmp1, op1);
             check_equalmem(token, tmp2, op2);
             if (n > 50) {
-               incr = random() % 100 + 1;
+               incr = rnd() % 100 + 1;
             }
             continue;
         }
@@ -1198,18 +1303,17 @@ Dec_DecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2,
     }
 }
 
-void
+static void
 Dec_DecDecCtx(const std::vector<std::string>& token,
               const Decimal_DecimalDecimalContext func,
-              bool scan_equal=false,
-              bool resolve_status=false)
+              bool scan_equal=false)
 {
     Context maxcontext{readcontext};
     Decimal result, tmp1, tmp2;
     Decimal op1, op2;
     std::string expected;
     uint32_t expstatus;
-    int n;
+    size_t n;
 
     if (scan_equal) {
         n = scan_op_expected(op1, expected, token, maxcontext);
@@ -1219,12 +1323,11 @@ Dec_DecDecCtx(const std::vector<std::string>& token,
         n = scan_op_op_expected(op1, op2, expected, token, maxcontext);
     }
     expstatus = scan_conditions(token, n);
+    Triple(token, op1, maxcontext);
+    Triple(token, op2, maxcontext);
 
     context.status(0);
     result = (op1.*func)(op2, context);
-    if (resolve_status) {
-        resolve_status_hack(expstatus, context.status());
-    }
 
     Dec_DecDecCtx_RunSingle(result, tmp1, tmp2, token, func, op1, op2, expected, expstatus);
     Dec_DecDecCtx_RunSingle(tmp1, tmp1, tmp2, token, func, op1, op2, expected, expstatus);
@@ -1239,7 +1342,7 @@ Dec_DecDecCtx(const std::vector<std::string>& token,
 /* Test a binary function with a binary result */
 typedef std::pair<Decimal, Decimal> (Decimal::*DecimalPair_DecimalDecimalContext)(const Decimal&, Context&) const;
 
-void
+static void
 DecPair_DecDecCtx_RunSingle(std::pair<Decimal, Decimal>& result, Decimal& tmp1, Decimal& tmp2,
                             const std::vector<std::string>& token,
                             const DecimalPair_DecimalDecimalContext func,
@@ -1247,7 +1350,7 @@ DecPair_DecDecCtx_RunSingle(std::pair<Decimal, Decimal>& result, Decimal& tmp1, 
                             const std::string& expected1, const std::string& expected2,
                             const uint32_t expstatus)
 {
-    int incr = 1;
+    uint64_t incr = 1;
     for (uint64_t n = 1; n < UINT64_MAX-100; n += incr) {
         mpd_init_rand(tmp1);
         mpd_init_rand(tmp2);
@@ -1268,7 +1371,7 @@ DecPair_DecDecCtx_RunSingle(std::pair<Decimal, Decimal>& result, Decimal& tmp1, 
             check_equalmem(token, tmp1, op1);
             check_equalmem(token, tmp2, op2);
             if (n > 50) {
-                incr = random() % 100 + 1;
+                incr = rnd() % 100 + 1;
             }
             continue;
         }
@@ -1291,7 +1394,7 @@ DecPair_DecDecCtx_RunSingle(std::pair<Decimal, Decimal>& result, Decimal& tmp1, 
     }
 }
 
-void
+static void
 DecPair_DecDecCtx(const std::vector<std::string>& token,
                   const DecimalPair_DecimalDecimalContext func,
                   bool scan_equal=false)
@@ -1302,7 +1405,7 @@ DecPair_DecDecCtx(const std::vector<std::string>& token,
     Decimal op1, op2;
     std::string expected1, expected2;
     uint32_t expstatus;
-    int n;
+    size_t n;
 
     if (scan_equal) {
         n = scan_op_expected_expected(op1, expected1, expected2,
@@ -1314,6 +1417,8 @@ DecPair_DecDecCtx(const std::vector<std::string>& token,
                                          token, maxcontext);
     }
     expstatus = scan_conditions(token, n);
+    Triple(token, op1, maxcontext);
+    Triple(token, op2, maxcontext);
 
     context.status(0);
     result = (op1.*func)(op2, context);
@@ -1335,7 +1440,7 @@ DecPair_DecDecCtx(const std::vector<std::string>& token,
 /* Test a ternary function */
 typedef Decimal (Decimal::*Decimal_DecimalDecimalDecimalContext)(const Decimal&, const Decimal&, Context&) const;
 
-void
+static void
 Dec_DecDecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2, Decimal& tmp3,
                            const std::vector<std::string>& token,
                            const Decimal_DecimalDecimalDecimalContext func,
@@ -1343,7 +1448,7 @@ Dec_DecDecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2, Decima
                            const std::string& expected,
                            const uint32_t expstatus)
 {
-    int incr = 1;
+    uint64_t incr = 1;
     for (uint64_t n = 1; n < UINT64_MAX-100; n += incr) {
         mpd_init_rand(tmp1);
         mpd_init_rand(tmp2);
@@ -1365,7 +1470,7 @@ Dec_DecDecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2, Decima
             check_equalmem(token, tmp2, op2);
             check_equalmem(token, tmp3, op3);
             if (n > 100) {
-                incr = random() % 100 + 1;
+                incr = rnd() % 100 + 1;
             }
             continue;
         }
@@ -1388,7 +1493,7 @@ Dec_DecDecDecCtx_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2, Decima
 }
 
 enum ternary_equal { OpOpOp, EqEqOp, EqOpEq, OpEqEq, EqEqEq };
-void
+static void
 Dec_DecDecDecCtx(const std::vector<std::string>& token,
                  const Decimal_DecimalDecimalDecimalContext func,
                  enum ternary_equal scan_equal=OpOpOp)
@@ -1398,7 +1503,7 @@ Dec_DecDecDecCtx(const std::vector<std::string>& token,
     Decimal op1, op2, op3;
     std::string expected;
     uint32_t expstatus;
-    int n;
+    size_t n;
 
     switch (scan_equal) {
     case OpOpOp:
@@ -1425,6 +1530,9 @@ Dec_DecDecDecCtx(const std::vector<std::string>& token,
         break;
     }
     expstatus = scan_conditions(token, n);
+    Triple(token, op1, maxcontext);
+    Triple(token, op2, maxcontext);
+    Triple(token, op3, maxcontext);
 
     Dec_DecDecDecCtx_RunSingle(result, tmp1, tmp2, tmp3, token, func, op1, op2, op3, expected, expstatus);
     Dec_DecDecDecCtx_RunSingle(result, result, tmp2, tmp3, token, func, op1, op2, op3, expected, expstatus);
@@ -1458,7 +1566,7 @@ Dec_DecDecDecCtx(const std::vector<std::string>& token,
 /* Test a binary function with no context argument */
 typedef Decimal (Decimal::*Decimal_DecimalDecimal)(const Decimal&) const;
 
-void
+static void
 Dec_DecDec_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2,
                      const std::vector<std::string>& token,
                      const Decimal_DecimalDecimal func,
@@ -1500,18 +1608,17 @@ Dec_DecDec_RunSingle(Decimal& result, Decimal& tmp1, Decimal& tmp2,
     }
 }
 
-void
+static void
 Dec_DecDec(const std::vector<std::string>& token,
            const Decimal_DecimalDecimal func,
-           bool scan_equal=false,
-           bool resolve_status=false)
+           bool scan_equal=false)
 {
     Context maxcontext{readcontext};
     Decimal result, tmp1, tmp2;
     Decimal op1, op2;
     std::string expected;
     uint32_t expstatus;
-    int n;
+    size_t n;
 
     if (scan_equal) {
         n = scan_op_expected(op1, expected, token, maxcontext);
@@ -1521,10 +1628,8 @@ Dec_DecDec(const std::vector<std::string>& token,
         n = scan_op_op_expected(op1, op2, expected, token, maxcontext);
     }
     expstatus = scan_conditions(token, n);
-
-    if (resolve_status) {
-        resolve_status_hack(expstatus, context.status());
-    }
+    Triple(token, op1, maxcontext);
+    Triple(token, op2, maxcontext);
 
     Dec_DecDec_RunSingle(result, tmp1, tmp2, token, func, op1, op2, expected, expstatus);
     Dec_DecDec_RunSingle(tmp1, tmp1, tmp2, token, func, op1, op2, expected, expstatus);
@@ -1539,7 +1644,7 @@ Dec_DecDec(const std::vector<std::string>& token,
 /* Test a binary function that returns an integer result */
 typedef int (Decimal::*Int_DecimalDecimal)(const Decimal&) const;
 
-void
+static void
 Int_DecDec_RunSingle(Decimal& tmp1, Decimal& tmp2,
                      const enum skip_cmp skip,
                      const std::vector<std::string>& token,
@@ -1581,7 +1686,7 @@ Int_DecDec_RunSingle(Decimal& tmp1, Decimal& tmp2,
     check_equalmem(token, tmp2, op2);
 }
 
-void
+static void
 Int_DecDec(const enum skip_cmp skip,
            const std::vector<std::string>& token,
            const Int_DecimalDecimal func,
@@ -1592,7 +1697,7 @@ Int_DecDec(const enum skip_cmp skip,
     Decimal op1, op2;
     std::string expected;
     uint32_t expstatus;
-    int n;
+    size_t n;
 
     if (scan_equal) {
         n = scan_op_expected(op1, expected, token, maxcontext);
@@ -1602,6 +1707,8 @@ Int_DecDec(const enum skip_cmp skip,
         n = scan_op_op_expected(op1, op2, expected, token, maxcontext);
     }
     expstatus = scan_conditions(token, n);
+    Triple(token, op1, maxcontext);
+    Triple(token, op2, maxcontext);
 
     Int_DecDec_RunSingle(tmp1, tmp2, skip, token, func, op1, op2, expected, expstatus);
     if (equalmem(op1, op2)) {
@@ -1612,7 +1719,7 @@ Int_DecDec(const enum skip_cmp skip,
 /* Test a binary function that returns a bool result */
 typedef bool (Decimal::*Bool_DecimalDecimal)(const Decimal&) const;
 
-void
+static void
 Bool_DecDec_RunSingle(Decimal& tmp1, Decimal& tmp2,
                       const enum skip_cmp skip,
                       const std::vector<std::string>& token,
@@ -1655,7 +1762,7 @@ Bool_DecDec_RunSingle(Decimal& tmp1, Decimal& tmp2,
     check_equalmem(token, tmp2, op2);
 }
 
-void
+static void
 Bool_DecDec(const enum skip_cmp skip,
             const std::vector<std::string>& token,
             const Bool_DecimalDecimal func,
@@ -1666,7 +1773,7 @@ Bool_DecDec(const enum skip_cmp skip,
     Decimal op1, op2;
     std::string expected;
     uint32_t expstatus;
-    int n;
+    size_t n;
 
     if (scan_equal) {
         n = scan_op_expected(op1, expected, token, maxcontext);
@@ -1676,6 +1783,8 @@ Bool_DecDec(const enum skip_cmp skip,
         n = scan_op_op_expected(op1, op2, expected, token, maxcontext);
     }
     expstatus = scan_conditions(token, n);
+    Triple(token, op1, maxcontext);
+    Triple(token, op2, maxcontext);
 
     Bool_DecDec_RunSingle(tmp1, tmp2, skip, token, func, op1, op2, expected, expstatus);
     if (equalmem(op1, op2)) {
@@ -1683,11 +1792,11 @@ Bool_DecDec(const enum skip_cmp skip,
     }
 }
 
-mpd_ssize_t
+static mpd_ssize_t
 scan_ssize(const std::string& tok)
 {
     errno = 0;
-    mpd_ssize_t x = strtossize(tok.c_str(), NULL, 10);
+    mpd_ssize_t x = strtossize(tok.c_str(), nullptr, 10);
     if (errno != 0) {
         err_raise("invalid conversion to ssize_t");
     }
@@ -1697,7 +1806,7 @@ scan_ssize(const std::string& tok)
 /* Test a function with a Decimal and an int64_t operand */
 typedef Decimal (Decimal::*Decimal_DecimalInt64Context)(int64_t, Context&) const;
 
-void
+static void
 Dec_DecInt64_RunSingle(Decimal& result, Decimal& tmp,
                        const std::vector<std::string>& token,
                        const Decimal_DecimalInt64Context func,
@@ -1733,7 +1842,7 @@ Dec_DecInt64_RunSingle(Decimal& result, Decimal& tmp,
     }
 }
 
-void
+static void
 Dec_DecInt64Ctx(const std::vector<std::string>& token,
                 const Decimal_DecimalInt64Context func)
 {
@@ -1742,8 +1851,10 @@ Dec_DecInt64Ctx(const std::vector<std::string>& token,
     Decimal op1, op2;
     std::string expected;
 
-    const int n = scan_op_op_expected(op1, op2, expected, token, maxcontext);
+    const size_t n = scan_op_op_expected(op1, op2, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op1, maxcontext);
+    Triple(token, op2, maxcontext);
 
     if (op2.isspecial() || op2.exponent() != 0) {
         return;
@@ -1759,7 +1870,7 @@ Dec_DecInt64Ctx(const std::vector<std::string>& token,
 }
 
 /* Test decimal::ln10 */
-void
+static void
 ln10(const std::vector<std::string>& token)
 {
     Context maxcontext{readcontext};
@@ -1767,8 +1878,9 @@ ln10(const std::vector<std::string>& token)
     Decimal op;
     std::string expected;
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     if (op.isspecial() || op.exponent() != 0) {
         return;
@@ -1802,7 +1914,7 @@ ln10(const std::vector<std::string>& token)
 }
 
 /* Test u64() */
-void
+static void
 u64_DecCtx(const std::vector<std::string>& token)
 {
     Context maxcontext{readcontext};
@@ -1811,8 +1923,9 @@ u64_DecCtx(const std::vector<std::string>& token)
     char calc[23];
     std::string expected;
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     context.status(0);
     try {
@@ -1828,7 +1941,7 @@ u64_DecCtx(const std::vector<std::string>& token)
 }
 
 /* Test u32() */
-void
+static void
 u32_DecCtx(const std::vector<std::string>& token)
 {
     Context maxcontext{readcontext};
@@ -1837,8 +1950,9 @@ u32_DecCtx(const std::vector<std::string>& token)
     uint32_t u32;
     char calc[23];
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     context.status(0);
     try {
@@ -1854,7 +1968,7 @@ u32_DecCtx(const std::vector<std::string>& token)
 }
 
 /* Test a function returning an int64_t */
-void
+static void
 i64_DecCtx(const std::vector<std::string>& token)
 {
     Context maxcontext{readcontext};
@@ -1863,8 +1977,9 @@ i64_DecCtx(const std::vector<std::string>& token)
     int64_t i64;
     char calc[23];
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     context.status(0);
     try {
@@ -1880,7 +1995,7 @@ i64_DecCtx(const std::vector<std::string>& token)
 }
 
 /* Test a function returning an int64_t */
-void
+static void
 i32_DecCtx(const std::vector<std::string>& token)
 {
     Context maxcontext{readcontext};
@@ -1889,8 +2004,9 @@ i32_DecCtx(const std::vector<std::string>& token)
     int32_t i32;
     char calc[23];
 
-    const int n = scan_op_expected(op, expected, token, maxcontext);
+    const size_t n = scan_op_expected(op, expected, token, maxcontext);
     const uint32_t expstatus = scan_conditions(token, n);
+    Triple(token, op, maxcontext);
 
     context.status(0);
     try {
@@ -1905,9 +2021,8 @@ i32_DecCtx(const std::vector<std::string>& token)
     compare_expected(token, calc, expected, 0, context);
 }
 
-
 /* process an input stream of test cases */
-void
+static void
 do_stream(std::istream& in, const bool generated=false)
 {
     std::string line;
@@ -1998,7 +2113,7 @@ do_stream(std::istream& in, const bool generated=false)
         }
 
         if (startswith(token.at(0), "Locale")) {
-            if (setlocale(LC_NUMERIC, token.at(1).c_str()) == NULL) {
+            if (setlocale(LC_NUMERIC, token.at(1).c_str()) == nullptr) {
                 err_token(token, "invalid or missing locale");
             }
             continue;
@@ -2025,7 +2140,7 @@ do_stream(std::istream& in, const bool generated=false)
             continue;  /* id is in the skip list */
         }
 
-#ifdef CONFIG_64
+#ifdef MPD_CONFIG_64
         if (startswith(token.at(0), "cov32")) {
             continue;  /* skip 32-bit specific coverage tests */
         }
@@ -2041,10 +2156,10 @@ do_stream(std::istream& in, const bool generated=false)
 
         /* Unary functions with std::string result */
         if (eqtoken(token.at(1), "tosci") || eqtoken(token.at(1), "apply")) {
-            Str_DecCtx(token, &Decimal::to_sci, generated);
+            Str_DecCtx(token, &Decimal::to_sci);
         }
         else if (eqtoken(token.at(1), "toeng")) {
-            Str_DecCtx(token, &Decimal::to_eng, generated);
+            Str_DecCtx(token, &Decimal::to_eng);
         }
         else if (eqtoken(token.at(1), "format")) {
             Fmt(token);
@@ -2119,21 +2234,21 @@ do_stream(std::istream& in, const bool generated=false)
             Dec_DecCtx(token, &Decimal::reduce);
         }
         else if (eqtoken(token.at(1), "squareroot")) {
-            #ifdef CONFIG_32
-                if (context.prec() == MPD_MAX_PREC) ulimit = 16000000;
+            #ifdef MPD_CONFIG_32
+                if (context.prec() == MPD_MAX_PREC) set_alloc_limit(16000000);
             #endif
             Dec_DecCtx(token, &Decimal::sqrt);
-            #ifdef CONFIG_32
-                if (context.prec() == MPD_MAX_PREC) ulimit = SIZE_MAX;
+            #ifdef MPD_CONFIG_32
+                if (context.prec() == MPD_MAX_PREC) set_alloc_limit(SIZE_MAX);
             #endif
         }
         else if (eqtoken(token.at(1), "quantize_squareroot")) {
-            #ifdef CONFIG_32
-                if (context.prec() == MPD_MAX_PREC) ulimit = 16000000;
+            #ifdef MPD_CONFIG_32
+                if (context.prec() == MPD_MAX_PREC) set_alloc_limit(16000000);
             #endif
             Dec_DecCtxWithQuantize(token, &Decimal::sqrt);
-            #ifdef CONFIG_32
-                if (context.prec() == MPD_MAX_PREC) ulimit = SIZE_MAX;
+            #ifdef MPD_CONFIG_32
+                if (context.prec() == MPD_MAX_PREC) set_alloc_limit(SIZE_MAX);
             #endif
         }
         else if (eqtoken(token.at(1), "tointegral")) {
@@ -2174,17 +2289,17 @@ do_stream(std::istream& in, const bool generated=false)
             Dec_DecDec(token, &Decimal::copy_sign);
         }
         else if (eqtoken(token.at(1), "divide")) {
-            #ifdef CONFIG_32
-                if (context.prec() == MPD_MAX_PREC) ulimit = 16000000;
+            #ifdef MPD_CONFIG_32
+                if (context.prec() == MPD_MAX_PREC) set_alloc_limit(16000000);
             #endif
-            Dec_DecDecCtx(token, &Decimal::div, false, generated);
-            Dec_DecDec(token, &Decimal::operator/, false, generated);
-            #ifdef CONFIG_32
-                if (context.prec() == MPD_MAX_PREC) ulimit = SIZE_MAX;
+            Dec_DecDecCtx(token, &Decimal::div, false);
+            Dec_DecDec(token, &Decimal::operator/, false);
+            #ifdef MPD_CONFIG_32
+                if (context.prec() == MPD_MAX_PREC) set_alloc_limit(SIZE_MAX);
             #endif
         }
         else if (eqtoken(token.at(1), "divideint")) {
-            Dec_DecDecCtx(token, &Decimal::divint, false, generated);
+            Dec_DecDecCtx(token, &Decimal::divint, false);
         }
         else if (eqtoken(token.at(1), "max")) {
             Dec_DecDecCtx(token, &Decimal::max);
@@ -2223,11 +2338,11 @@ do_stream(std::istream& in, const bool generated=false)
             Dec_DecInt64Ctx(token, &Decimal::rescale);
         }
         else if (eqtoken(token.at(1), "remainder")) {
-            Dec_DecDecCtx(token, &Decimal::rem, false, generated);
-            Dec_DecDec(token, &Decimal::operator%, false, generated);
+            Dec_DecDecCtx(token, &Decimal::rem, false);
+            Dec_DecDec(token, &Decimal::operator%, false);
         }
         else if (eqtoken(token.at(1), "remaindernear")) {
-            Dec_DecDecCtx(token, &Decimal::rem_near, false, generated);
+            Dec_DecDecCtx(token, &Decimal::rem_near, false);
         }
         else if (eqtoken(token.at(1), "rotate")) {
             Dec_DecDecCtx(token, &Decimal::rotate);
@@ -2437,22 +2552,25 @@ do_stream(std::istream& in, const bool generated=false)
         }
 
         else if (startswith(token.at(0), "bool")) {
-            continue;  // skip: bool tests in extra.decTest (not implemented in libmpdec++)
+            /* skip: not implemented: bool tests in extra.decTest */
+            continue;
         }
 
         else if (eqtoken(token.at(1), "get_uint64_abs") ||
                  eqtoken(token.at(1), "get_ssize64") ||
                  eqtoken(token.at(1), "get_uint32_abs") ||
                  eqtoken(token.at(1), "get_ssize32")) {
-            ;  // skip: not implemented in libmpdec++
+            /* skip: not implemented */
         }
 
         else if (eqtoken(token.at(1), "rescale")) {
-            ;  // skip: 'rescale' is obsolete in the standard and Decimal::rescale()
-               // is not equivalent to the obsolete version.
+           /*
+            * skip: 'rescale' is obsolete in the standard and Decimal::rescale()
+            * is not equivalent to the obsolete version.
+            */
         }
         else if (eqtoken(token.at(1), "baseconv")) {
-            ;  // skip: not implemented in libmpdec++.
+            /* skip: not implemented */
         }
         else {
             err_token(token, "unknown operation");
@@ -2460,7 +2578,19 @@ do_stream(std::istream& in, const bool generated=false)
     }
 }
 
-void
+static int
+exit_status(const std::vector<std::string>& status)
+{
+    for (auto p : status) {
+        if (p != "PASS") {
+            return EXIT_FAILURE;
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
+
+static void
 do_file(const std::string& filename, std::vector<std::string>& status, size_t i, bool threaded)
 {
     try {
@@ -2481,30 +2611,32 @@ do_file(const std::string& filename, std::vector<std::string>& status, size_t i,
         if (in.bad()) {
             err_raise("iterating over lines failed in ", filename);
         }
-    } catch (Failure& e) {
+    } catch (test::Failure& e) {
         status[i] = e.what();
     }
 }
 
 /* process a file list */
-int
+static int
 do_files(const std::vector<std::string>& files)
 {
     const size_t n = files.size();
     std::vector<std::string> status(n, "PASS");
 
     for (size_t i = 0; i < n; i++) {
-        std::cerr << files[i] << " ... " << std::flush;
+        std::cout << files[i] << " ... " << std::flush;
         do_file(files[i], status, i, false);
-        std::cerr << status[i] << std::endl << std::flush;
+        std::cout << status[i] << "\n" << std::flush;
     }
+
+    std::cout << "\n" << std::flush;
 
     return exit_status(status);
 }
 
-/* process a file list, threaded */
-int
-do_files_threaded(const std::vector<std::string>& files)
+/* process a file list, using std::thread */
+static int
+do_files_thread(const std::vector<std::string>& files)
 {
     const size_t n = files.size();
     std::vector<std::string> status(n, "PASS");
@@ -2519,26 +2651,111 @@ do_files_threaded(const std::vector<std::string>& files)
     }
 
     for (size_t i = 0; i < n; i++) {
-        std::cerr << files[i] << " ... " << status[i] << std::endl << std::flush;
+        std::cout << files[i] << " ... " << status[i] << "\n" << std::flush;
     }
+
+    std::cout << "\n" << std::flush;
 
     return exit_status(status);
 }
 
+#ifdef HAVE_PTHREAD_H
+/*
+ * The pthread section is for systems like AIX, which have a thread stack size
+ * that is too small for std::thread.  std::thread does not allow to set the
+ * stack size.
+ */
+#define THREAD_STACK_SIZE 1048576
+
+struct thread_info {
+    size_t index;
+    pthread_t tid;
+    const std::string *filename;
+    std::vector<std::string> *status;
+};
+
+static void *
+do_file_pthread(void *arg)
+{
+    struct thread_info *tinfo = static_cast<struct thread_info *>(arg);
+
+    try {
+        if (context.prec() != 1) {
+            err_raise("automatic context initialization from template failed");
+        }
+
+        std::ifstream in{*tinfo->filename};
+        if (!in.is_open()) {
+            err_raise("could not open ", *tinfo->filename);
+        }
+
+        do_stream(in);
+
+        if (in.bad()) {
+            err_raise("iterating over lines failed in ", *tinfo->filename);
+        }
+    } catch (test::Failure& e) {
+        (*tinfo->status)[tinfo->index] = e.what();
+    }
+
+    return nullptr;
+}
+
+/* process a file list, using pthread */
+static int
+do_files_pthread(const std::vector<std::string>& files)
+{
+    const size_t n = files.size();
+    std::vector<std::string> status(n, "PASS");
+    std::vector<struct thread_info> tinfo(n);
+    pthread_attr_t tattr;
+    int ret;
+
+    ret = pthread_attr_init(&tattr);
+    if (ret != 0) {
+        err_raise("thread attribute initialization failed");
+    }
+
+    ret = pthread_attr_setstacksize(&tattr, THREAD_STACK_SIZE);
+    if (ret != 0) {
+        pthread_attr_destroy(&tattr);
+        err_raise("setting thread stack size failed");
+    }
+
+    for (size_t i = 0; i < n; i++) {
+        tinfo[i].index = i;
+        tinfo[i].filename = &files[i];
+        tinfo[i].status = &status;
+
+        ret = pthread_create(&tinfo[i].tid, &tattr, &do_file_pthread, &tinfo[i]);
+        if (ret != 0) {
+            pthread_attr_destroy(&tattr);
+            err_raise("could not create thread");
+        }
+    }
+
+    for (size_t i = 0; i < n; i++) {
+        ret = pthread_join(tinfo[i].tid, nullptr);
+        if (ret != 0) {
+            pthread_attr_destroy(&tattr);
+            err_raise("error in thread execution");
+        }
+    }
+
+    for (size_t i = 0; i < n; i++) {
+        std::cout << files[i] << " ... " << status[i] << "\n" << std::flush;
+    }
+
+    std::cout << "\n" << std::flush;
+
+    pthread_attr_destroy(&tattr);
+
+    return exit_status(status);
+}
+#endif  /* HAVE_PTHREAD_H */
 
 
-#define err_exit(msg) \
-  do {std::cerr << __FILE__ << ":" << __LINE__ << ": error: "; \
-      std::cerr << msg  << std::endl;                          \
-      std::exit(EXIT_FAILURE);                                 \
-  } while (0)
-
-
-namespace mpd {
-
-#define MPD_CHECK(p, msg) if (!(p)) { err_exit(msg); }
-
-const int32_t int32_cases[] = {
+static const int32_t int32_cases[] = {
   INT32_MIN, INT32_MIN+1, INT32_MIN+2,
   INT32_MAX-2, INT32_MAX-1, INT32_MAX,
   -10, -5, -1, 0, 5, 10,
@@ -2560,7 +2777,7 @@ const int32_t int32_cases[] = {
    (1<<9),  (1<<8),  (1<<7),  (1<<6),  (1<<5),  (1<<4),  (1<<3),  (1<<2),  (1<<1),  (1<<0)
 };
 
-const int64_t int64_cases[] = {
+static const int64_t int64_cases[] = {
   INT64_MIN, INT64_MIN+1, INT64_MIN+2, -10, -5, -1, 0, 5, 10, INT64_MAX-2, INT64_MAX-1, INT64_MAX,
   -999999999999999999LL, -99999999999999999LL, -9999999999999999LL, -999999999999999LL, -99999999999999LL, -9999999999999LL,
   -999999999999LL, -99999999999LL, -9999999999LL, -999999999LL, -99999999LL, -9999999LL, -999999LL, -99999LL, -9999LL, -999LL, -99LL, -9LL,
@@ -2592,7 +2809,7 @@ const int64_t int64_cases[] = {
   (1LL<<9),  (1LL<<8),  (1LL<<7),  (1LL<<6),  (1LL<<5),  (1LL<<4),  (1LL<<3),  (1LL<<2),  (1LL<<1),  (1LL<<0),
 };
 
-const char *init_cases[] = {
+static const char *init_cases[] = {
   "sNaN", "sNaN19",
   "sNaN1982612612300000002000000000050000000000000000101111111111111112111111111111111111111111111111111111111111111111"
   "111111111111111111111111111111111111111111111111111111111111111",
@@ -2614,7 +2831,7 @@ const char *init_cases[] = {
   "-0.0000000000000000000000000000000000000000000000000001e-999999"
 };
 
-void
+static void
 test_set_i32(void)
 {
     const Context savecontext = context;
@@ -2631,7 +2848,7 @@ test_set_i32(void)
     context = savecontext;
 }
 
-void
+static void
 test_set_i64(void)
 {
     const Context savecontext = context;
@@ -2648,20 +2865,16 @@ test_set_i64(void)
     context = savecontext;
 }
 
-}  /* namespace mpd */
-}  /* namespace test */
 
-
-namespace run {
 /* process a single test file */
-void
+static void
 usage(void)
 {
-    std::cerr << "runtest: usage: runtest testfile [--threaded]" << std::endl;
+    std::cerr << "runtest: usage: runtest testfile [--custom] [--alloc] [--thread|--pthread]" << std::endl;
     exit(EXIT_FAILURE);
 }
 
-std::vector<std::string>
+static std::vector<std::string>
 collect_files(const std::string& topfile)
 {
     std::vector<std::string> files;
@@ -2673,12 +2886,12 @@ collect_files(const std::string& topfile)
     }
 
     while (std::getline(in, line)) {
-        std::vector<std::string> token = test::split(line);
+        std::vector<std::string> token = split(line);
         if (token.size() == 0) {
             continue;
         }
 
-        if (test::startswith(token.at(0), "Dectest")) {
+        if (startswith(token.at(0), "Dectest")) {
             files.push_back(token.at(1));
             continue;
         }
@@ -2693,95 +2906,105 @@ collect_files(const std::string& topfile)
 
     return files;
 }
-}  /* namespace run */
+
 
 int
-main(int argc, char **argv)
+main(int argc, char *argv[])
 {
-    bool threaded = false;
-    std::string filename;
+    std::vector<std::string> args(argv + (argc!=0), argv + argc);
+    std::string filename = "";
+    bool custom_alloc = false;
+    bool check_alloc = false;
+    bool thread = false;
+    bool pthread = false;
 
-    if (argc == 2) {
-        filename = std::string(argv[1]);
-    }
-    else if (argc == 3) {
-        filename = std::string(argv[1]);
-        if (std::string(argv[2]) != "--threaded") {
-            run::usage();
+    for (auto arg : args) {
+        if (filename == "" && (arg == "-" || !startswith(arg, "--"))) {
+            filename = arg;
         }
-        threaded = true;
+        else if (!custom_alloc && arg == "--custom") {
+            custom_alloc = true;
+        }
+        else if (!check_alloc && arg == "--alloc") {
+            check_alloc = true;
+        }
+        else if (!thread && arg == "--thread") {
+        #ifdef _AIX
+            err_exit("AIX: thread stack (96K) is too small for std::thread: use --pthread");
+        #endif
+            thread = true;
+        }
+        else if (!pthread && arg == "--pthread") {
+            pthread = true;
+        }
+        else {
+            usage();
+        }
     }
-    else {
-        run::usage();
+    if (filename == "") {
+        usage();
     }
 
-    static_assert(MPD_MAJOR_VERSION == 2, "MPD_MAJOR_VERSION must be 2");
-    static_assert(MPD_MINOR_VERSION == 5, "MPD_MINOR_VERSION must be 5");
-    static_assert(MPD_MICRO_VERSION == 0, "MPD_MICRO_VERSION must be 0");
+    /* Initialize custom allocation functions */
+    test::init_alloc(custom_alloc, check_alloc);
 
-    if (strcmp(mpd_version(), "2.5.0") != 0) {
-        err_exit("mpd_version() != 2.5.0");
-    }
-    if (strcmp(MPD_VERSION, "2.5.0") != 0) {
-        err_exit("MPD_VERSION != 2.5.0");
-    }
-
-    srand((unsigned int)time(NULL));
-
-    // Initialize custom alloction functions.
-    test::init_alloc_fail();
-
-    // Initialize the context initialization template.
+    /* Initialize the context template */
     context_template = Context(1, 1, -1);
-    // With gcc and clang, the thread local context is initialized on first access
-    // also for the main thread.  This is implementation-defined, the test is here
-    // to remind people that the behavior is not guaranteed.
-#if defined(__GNUC__) && !defined(__INTEL_COMPILER)
-    if (context.prec() != 1) {
-        err_exit("main thread: automatic context initialization from template failed");
-    }
-#endif
 
-    test::mpd::test_set_i32();
-    test::mpd::test_set_i64();
+    /* Initialize main thread context */
+    context = context_template;
 
+    /* Initial tests */
+    test_set_i32();
+    test_set_i64();
+
+
+    /* Read test cases from stdin */
     if (filename == "-") {
         try {
-            test::do_stream(std::cin, true);
+            do_stream(std::cin, true);
         }
         catch (test::Failure& e) {
-            std::cerr << "<stdin> ... " << e.what() << std::endl;
+            std::cerr << "<stdin> ... " << e.what() << "\n" << std::flush;
             return EXIT_FAILURE;
         }
-        std::cerr << "<stdin> ... PASS" << std::endl << std::flush;
+        std::cout << "<stdin> ... PASS\n\n" << std::flush;
         return EXIT_SUCCESS;
     }
 
+    /* Collect test files */
     std::vector<std::string> files;
-
-    if (test::endswith(filename, ".decTest")) {
+    if (endswith(filename, ".decTest")) {
         files.push_back(filename);
     }
-    else if (test::endswith(filename, ".topTest")) {
+    else if (endswith(filename, ".topTest")) {
         std::ifstream in{filename};
         if (!in.is_open()) {
             err_exit("could not open file");
         }
 
-        files = run::collect_files(filename);
+        files = collect_files(filename);
 
         if (in.bad()) {
             err_exit("iterating over lines failed");
         }
     }
     else {
-        err_exit("unrecognized file extension");
+        err_exit("unrecognized file extension: expect .decTest or .topTest");
     }
 
-    if (threaded) {
-        return test::do_files_threaded(files);
+    /* Run all tests */
+    if (thread) {
+        return do_files_thread(files);
+    }
+    else if (pthread) {
+    #ifdef HAVE_PTHREAD_H
+        return do_files_pthread(files);
+    #else
+        err_exit("pthread not found on this system: use --thread");
+    #endif
     }
     else {
-        return test::do_files(files);
+        return do_files(files);
     }
 }

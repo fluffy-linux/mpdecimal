@@ -62,11 +62,11 @@ new_mpd(void)
  * escaped and can be used for coloring.
  */
 static int
-color_point(const mpd_t *x0, const mpd_t *y0, const int maxiter, mpd_context_t *ctx)
+color_point(const mpd_t *x0, const mpd_t *y0, const long maxiter, mpd_context_t *ctx)
 {
     mpd_t *x, *y, *sq_x, *sq_y;
     mpd_t *two, *four, *c;
-    int i;
+    long i;
 
     x = new_mpd();
     y = new_mpd();
@@ -116,9 +116,9 @@ main(int argc, char **argv)
     mpd_context_t ctx;
     mpd_t *x0, *y0;
     mpd_t *sqrt_2, *xstep, *ystep;
-    uint32_t prec = 19;
+    mpd_ssize_t prec = 19;
 
-    int iter = 1000;
+    long iter = 1000;
     int points[40][80];
     int i, j;
     clock_t start_clock, end_clock;
@@ -128,7 +128,7 @@ main(int argc, char **argv)
         fprintf(stderr, "usage: ./bench prec iter\n");
         exit(1);
     }
-    prec = strtoul(argv[1], NULL, 10);
+    prec = strtoll(argv[1], NULL, 10);
     iter = strtol(argv[2], NULL, 10);
 
     mpd_init(&ctx, prec);

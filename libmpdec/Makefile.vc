@@ -4,9 +4,9 @@
 # ======================================================================
 
 
-LIBSTATIC = libmpdec-2.5.0.lib
-LIBIMPORT = libmpdec-2.5.0.dll.lib
-LIBSHARED = libmpdec-2.5.0.dll
+LIBSTATIC = libmpdec-2.5.1.lib
+LIBIMPORT = libmpdec-2.5.1.dll.lib
+LIBSHARED = libmpdec-2.5.1.dll
 
 
 MPD_HEADER = mpdecimal32vc.h
@@ -44,7 +44,11 @@ OPT_SHARED = /MD /Ox /GS /EHsc
 !endif
 
 MPD_CFLAGS = /W4 /wd4200 /wd4204 /wd4221 /D_CRT_SECURE_NO_WARNINGS /nologo $(CONFIG) $(OPT)
-MPD_CFLAGS_SHARED = /DBUILD_DLL /W4 /wd4200 /wd4204 /wd4221 /D_CRT_SECURE_NO_WARNINGS /nologo $(CONFIG) $(OPT_SHARED) $(PGOFLAGS)
+MPD_CFLAGS_SHARED = /DBUILD_LIBMPDEC /W4 /wd4200 /wd4204 /wd4221 /D_CRT_SECURE_NO_WARNINGS /nologo $(CONFIG) $(OPT_SHARED) $(PGOFLAGS)
+
+MPD_BIN_CFLAGS = /W4 /wd4200 /wd4204 /wd4221 /D_CRT_SECURE_NO_WARNINGS /nologo $(OPT)
+MPD_BIN_CFLAGS_SHARED = /W4 /wd4200 /wd4204 /wd4221 /D_CRT_SECURE_NO_WARNINGS /nologo $(OPT_SHARED) $(PGOFLAGS)
+
 MPD_LDFLAGS= /DLL /MANIFEST $(LDFLAGS)
 
 
@@ -55,11 +59,11 @@ OBJS = basearith.obj context.obj constants.obj convolute.obj crt.obj \
        mpdecimal.obj mpsignal.obj difradix2.obj fnt.obj fourstep.obj \
        io.obj mpalloc.obj numbertheory.obj sixstep.obj transpose.obj
 
-SHARED_OBJS = .objs/basearith.obj .objs/context.obj .objs/constants.obj \
-              .objs/convolute.obj .objs/crt.obj .objs/mpdecimal.obj .objs/mpsignal.obj \
-              .objs/difradix2.obj .objs/fnt.obj .objs/fourstep.obj .objs/io.obj \
-              .objs/mpalloc.obj .objs/numbertheory.obj .objs/sixstep.obj \
-              .objs/transpose.obj
+SHARED_OBJS = .objs\basearith.obj .objs\context.obj .objs\constants.obj \
+              .objs\convolute.obj .objs\crt.obj .objs\mpdecimal.obj .objs\mpsignal.obj \
+              .objs\difradix2.obj .objs\fnt.obj .objs\fourstep.obj .objs\io.obj \
+              .objs\mpalloc.obj .objs\numbertheory.obj .objs\sixstep.obj \
+              .objs\transpose.obj
 
 !if "$(MACHINE)" == "x64"
 OBJS = $(OBJS) vcdiv64.obj
@@ -80,7 +84,7 @@ $(LIBSHARED): Makefile $(SHARED_OBJS)
 
 
 mpdecimal.h:\
-Makefile $(MPD_HEADER) vccompat.h
+Makefile $(MPD_HEADER)
 	-@copy /y $(MPD_HEADER) mpdecimal.h
 
 basearith.obj:\
@@ -230,16 +234,16 @@ Makefile vcdiv64.asm
 FORCE:
 
 bench: FORCE
-	$(CC) $(MPD_CFLAGS) bench.c $(LIBSTATIC)
+	$(CC) $(MPD_BIN_CFLAGS) bench.c $(LIBSTATIC)
 
 bench_shared: FORCE
-	$(CC) $(MPD_CFLAGS_SHARED) bench.c /Fobench_shared $(LIBIMPORT)
+	$(CC) $(MPD_BIN_CFLAGS_SHARED) bench.c /Fobench_shared $(LIBIMPORT)
 
 pow: FORCE
-	$(CC) -I. $(MPD_CFLAGS) examples\pow.c $(LIBSTATIC)
+	$(CC) -I. $(MPD_BIN_CFLAGS) examples\pow.c $(LIBSTATIC)
 
 sqrt: FORCE
-	$(CC) -I. $(MPD_CFLAGS) examples\sqrt.c $(LIBSTATIC)
+	$(CC) -I. $(MPD_BIN_CFLAGS) examples\sqrt.c $(LIBSTATIC)
 
 examples: pow sqrt
 

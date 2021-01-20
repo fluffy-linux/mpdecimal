@@ -26,9 +26,12 @@
  */
 
 
+#include <cstdint>
+
 #include <iostream>
 #include <sstream>
-#include <cstdint>
+#include <stdexcept>
+
 #include "decimal.hh"
 
 
@@ -63,7 +66,7 @@ template<typename T>
 void
 raise(const std::string& msg)
 {
-    throw T(msg);
+  throw T(msg);
 }
 
 const cmap signal_map[] = {
@@ -75,7 +78,7 @@ const cmap signal_map[] = {
   { MPD_Inexact, "Inexact", "decimal::Inexact", raise<decimal::Inexact> },
   { MPD_Rounded, "Rounded", "decimal::Rounded", raise<decimal::Rounded> },
   { MPD_Clamped, "Clamped", "decimal::Clamped", raise<decimal::Clamped> },
-  { UINT32_MAX, NULL, NULL, NULL }
+  { UINT32_MAX, nullptr, nullptr, nullptr }
 };
 
 const cmap cond_map[] = {
@@ -83,7 +86,7 @@ const cmap cond_map[] = {
   { MPD_Conversion_syntax, "ConversionSyntax", "decimal::ConversionSyntax", raise<decimal::ConversionSyntax> },
   { MPD_Division_impossible, "DivisionImpossible", "decimal::DivisionImpossible", raise<decimal::DivisionImpossible> },
   { MPD_Division_undefined, "DivisionUndefined", "decimal::DivisionUndefined", raise<decimal::DivisionUndefined> },
-  { UINT32_MAX, NULL, NULL, NULL }
+  { UINT32_MAX, nullptr, nullptr, nullptr }
 };
 
 std::string
@@ -169,7 +172,14 @@ Context context_template {
   1                                                              /* allcr */
 };
 
-thread_local Context context{*context_template.getconst()};
+#if defined(__OpenBSD__) || defined(__sun) || defined(_MSC_VER) && defined(_DLL)
+Context& getcontext() {
+  static thread_local Context _context{context_template};
+  return _context;
+}
+#else
+thread_local Context context{context_template};
+#endif
 
 /* Factory function for creating a context for maximum unrounded arithmetic.*/
 Context
@@ -196,7 +206,7 @@ void
 Context::raiseit(const uint32_t status)
 {
   if (status & MPD_Malloc_error) {
-    throw MallocError();
+    throw MallocError("out of memory");
   }
 
   const std::string msg = flags(status);
@@ -222,7 +232,7 @@ Context::repr() const
   std::ostringstream ss;
 
   if (rounding < 0 || rounding >= MPD_ROUND_GUARD) {
-    throw RuntimeError("invalid rounding mode");
+    throw RuntimeError("internal_error: invalid rounding mode");
   }
 
   const char *round_str = mpd_round_string[rounding];
