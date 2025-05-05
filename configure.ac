@@ -1,5 +1,5 @@
 AC_COPYRIGHT([
-Copyright (c) 2008-2024 Stefan Krah. All rights reserved.
+Copyright (c) 2008-2025 Stefan Krah. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
@@ -32,10 +32,11 @@ AH_TOP([
  */
 ])
 
+
 AC_PREREQ([2.69])
 
 AC_INIT([mpdecimal],
-        [4.0.0],
+        [4.0.1],
         [mpdecimal-bugs@bytereef.org],
         [mpdecimal],
         [https://www.bytereef.org/mpdecimal/index.html])
@@ -331,7 +332,7 @@ AC_CANONICAL_HOST
 #                              Select library names
 # ==============================================================================
 
-# MinGW support:
+# MinGW/Cygwin/MSYS2 support:
 ENABLE_MINGW="no"
 
 # Set library names and linker flags:
@@ -345,8 +346,8 @@ case $host in
   *-*-darwin*)
     LIBNAME="libmpdec.dylib"
     LIBSONAME="libmpdec.4.dylib"
-    LIBSHARED="libmpdec.4.0.0.dylib"
-    CONFIGURE_LDFLAGS="-dynamiclib $FPIC -install_name @rpath/$LIBSONAME -compatibility_version 4.0 -current_version 4.0.0"
+    LIBSHARED="libmpdec.4.0.1.dylib"
+    CONFIGURE_LDFLAGS="-dynamiclib $FPIC -install_name \$(libdir)/$LIBSONAME -compatibility_version 4.0 -current_version 4.0.1"
     ;;
   *-*-aix*)
     LIBNAME=
@@ -366,6 +367,15 @@ case $host in
     CONFIGURE_LDFLAGS="-shared -Wl,--out-implib,$LIBIMPORT"
     ENABLE_MINGW="yes"
     ;;
+  *-*-cygwin*)
+    FPIC=
+    LIBNAME=
+    LIBIMPORT="libmpdec.dll.a"
+    LIBSONAME=
+    LIBSHARED="cygmpdec-4.dll"
+    CONFIGURE_LDFLAGS="-shared -Wl,--out-implib,$LIBIMPORT"
+    ENABLE_MINGW="yes"
+    ;;
   *-*-msys)
     FPIC=
     LIBNAME=
@@ -378,7 +388,7 @@ case $host in
   *)
     LIBNAME="libmpdec.so"
     LIBSONAME="libmpdec.so.4"
-    LIBSHARED="libmpdec.so.4.0.0"
+    LIBSHARED="libmpdec.so.4.0.1"
     CONFIGURE_LDFLAGS="-shared $FPIC -Wl,-soname,$LIBSONAME"
     ;;
 esac
@@ -389,8 +399,8 @@ case $host in
   *-*-darwin*)
     LIBNAME_CXX="libmpdec++.dylib"
     LIBSONAME_CXX="libmpdec++.4.dylib"
-    LIBSHARED_CXX="libmpdec++.4.0.0.dylib"
-    CONFIGURE_LDXXFLAGS="-dynamiclib $FPIC -install_name @rpath/$LIBSONAME_CXX -compatibility_version 4.0 -current_version 4.0.0"
+    LIBSHARED_CXX="libmpdec++.4.0.1.dylib"
+    CONFIGURE_LDXXFLAGS="-dynamiclib $FPIC -install_name \$(libdir)/$LIBSONAME_CXX -compatibility_version 4.0 -current_version 4.0.1"
     ;;
   *-*-aix*)
     LIBNAME_CXX=
@@ -405,6 +415,13 @@ case $host in
     LIBSHARED_CXX="libmpdec++-4.dll"
     CONFIGURE_LDXXFLAGS="-shared -Wl,--out-implib,$LIBIMPORT_CXX"
     ;;
+  *-*-cygwin*)
+    LIBNAME_CXX=
+    LIBIMPORT_CXX="libmpdec++.dll.a"
+    LIBSONAME_CXX=
+    LIBSHARED_CXX="cygmpdec++-4.dll"
+    CONFIGURE_LDXXFLAGS="-shared -Wl,--out-implib,$LIBIMPORT_CXX"
+    ;;
   *-*-msys)
     LIBNAME_CXX=
     LIBIMPORT_CXX="libmpdec++.dll.a"
@@ -415,7 +432,7 @@ case $host in
   *)
     LIBNAME_CXX="libmpdec++.so"
     LIBSONAME_CXX="libmpdec++.so.4"
-    LIBSHARED_CXX="libmpdec++.so.4.0.0"
+    LIBSHARED_CXX="libmpdec++.so.4.0.1"
     CONFIGURE_LDXXFLAGS="-shared $FPIC -Wl,-soname,$LIBSONAME_CXX"
     ;;
 esac
@@ -536,6 +553,7 @@ INITIAL_CXXFLAGS="$CXXFLAGS"
 INITIAL_LDFLAGS="$LDFLAGS"
 INITIAL_LDXXFLAGS="$LDXXFLAGS"
 
+# Rename compiler in case $CC=cc:
 case $CC in
   cc)
     case $build in
@@ -708,9 +726,7 @@ case $CC in
     ;;
   *icc*)
     AR=xiar
-    LD="$CC"
     CXX=icpc
-    LDXX=icpc
     MPD_PTHREAD="-pthread"
     MPD_WARN="-Wall -Wextra -Wno-unknown-pragmas -std=c99 -pedantic -diag-disable=11074,11076"
     MPD_WARNXX="-Wall -Wextra -std=c++11 -pedantic -diag-disable=11074,11076"
@@ -727,7 +743,6 @@ case $CC in
     ;;
   *xlc*)
     CONFIG_UNIVERSAL_AIX=$CONFIG_UNIVERSAL_AIX_ANSI64
-    LD="$CC"
     CONFIGURE_LDFLAGS="-qmkshrobj -bnoentry -bE:.objs/symbols.exp"
     LINK_STATIC="-bstatic"
     LINK_DYNAMIC="-bshared"
@@ -749,15 +764,13 @@ case $CC in
     ;;
 esac
 
-AC_ARG_VAR(LDXX, [C++ linker (default is $CXX)])
 AC_ARG_VAR(LDXXFLAGS, [C++ linker flags])
 
-if test -z "$LD"; then
-  LD="$CC"
-fi
-if test -z "$LDXX"; then
-  LDXX="$CXX"
-fi
+# These variables are set unconditionally because CONFIGURE_LDFLAGS etc.
+# require the compiler frontends.  We leave them in the Makefiles in case
+# someone needs to edit the Makefiles manually.
+LD="$CC"
+LDXX="$CXX"
 
 AC_SUBST(CC)
 AC_SUBST(LD)

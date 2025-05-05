@@ -16,10 +16,10 @@ copy /y Makefile.vc Makefile
 nmake clean
 nmake MACHINE=%machine% DEBUG=%dbg%
 
-copy /y "libmpdec-4.0.0.lib" ..\vcbuild\dist_arm32
-copy /y "libmpdec-4.0.0.dll" ..\vcbuild\dist_arm32
-copy /y "libmpdec-4.0.0.dll.lib" ..\vcbuild\dist_arm32
-copy /y "libmpdec-4.0.0.dll.exp" ..\vcbuild\dist_arm32
+copy /y "libmpdec-4.0.1.lib" ..\vcbuild\dist_arm32
+copy /y "libmpdec-4.0.1.dll" ..\vcbuild\dist_arm32
+copy /y "libmpdec-4.0.1.dll.lib" ..\vcbuild\dist_arm32
+copy /y "libmpdec-4.0.1.dll.exp" ..\vcbuild\dist_arm32
 copy /y "mpdecimal.h" ..\vcbuild\dist_arm32
 
 
@@ -28,10 +28,10 @@ copy /y Makefile.vc Makefile
 nmake clean
 nmake DEBUG=%dbg%
 
-copy /y "libmpdec++-4.0.0.lib" ..\vcbuild\dist_arm32
-copy /y "libmpdec++-4.0.0.dll" ..\vcbuild\dist_arm32
-copy /y "libmpdec++-4.0.0.dll.lib" ..\vcbuild\dist_arm32
-copy /y "libmpdec++-4.0.0.dll.exp" ..\vcbuild\dist_arm32
+copy /y "libmpdec++-4.0.1.lib" ..\vcbuild\dist_arm32
+copy /y "libmpdec++-4.0.1.dll" ..\vcbuild\dist_arm32
+copy /y "libmpdec++-4.0.1.dll.lib" ..\vcbuild\dist_arm32
+copy /y "libmpdec++-4.0.1.dll.exp" ..\vcbuild\dist_arm32
 copy /y "decimal.hh" ..\vcbuild\dist_arm32
 
 cd ..\vcbuild

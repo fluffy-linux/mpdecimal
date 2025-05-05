@@ -5,13 +5,13 @@
 
 SRCDIR = ..\libmpdec
 
-LIBSTATIC = libmpdec-4.0.0.lib
-LIBIMPORT = libmpdec-4.0.0.dll.lib
-LIBSHARED = libmpdec-4.0.0.dll
+LIBSTATIC = libmpdec-4.0.1.lib
+LIBIMPORT = libmpdec-4.0.1.dll.lib
+LIBSHARED = libmpdec-4.0.1.dll
 
-LIBSTATIC_CXX = libmpdec++-4.0.0.lib
-LIBIMPORT_CXX = libmpdec++-4.0.0.dll.lib
-LIBSHARED_CXX = libmpdec++-4.0.0.dll
+LIBSTATIC_CXX = libmpdec++-4.0.1.lib
+LIBIMPORT_CXX = libmpdec++-4.0.1.dll.lib
+LIBSHARED_CXX = libmpdec++-4.0.1.dll
 
 !if "$(DEBUG)" == "1"
 OPT = /MTd /Od /Zi /EHsc

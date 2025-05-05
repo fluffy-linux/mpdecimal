@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024 Stefan Krah. All rights reserved.
+ * Copyright (c) 2020-2025 Stefan Krah. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -2829,13 +2829,13 @@ main(int argc, char *argv[])
     /* Check version numbers */
     static_assert(MPD_MAJOR_VERSION == 4, "MPD_MAJOR_VERSION must be 4");
     static_assert(MPD_MINOR_VERSION == 0, "MPD_MINOR_VERSION must be 0");
-    static_assert(MPD_MICRO_VERSION == 0, "MPD_MICRO_VERSION must be 0");
+    static_assert(MPD_MICRO_VERSION == 1, "MPD_MICRO_VERSION must be 1");
 
-    if (mpd_version() != std::string("4.0.0")) {
-        err_exit("mpd_version() != 4.0.0");
+    if (mpd_version() != std::string("4.0.1")) {
+        err_exit("mpd_version() != 4.0.1");
     }
-    if (MPD_VERSION != std::string("4.0.0")) {
-        err_exit("MPD_VERSION != 4.0.0");
+    if (MPD_VERSION != std::string("4.0.1")) {
+        err_exit("MPD_VERSION != 4.0.1");
     }
 
     /* Check fundamental libmpdec++ invariant */
