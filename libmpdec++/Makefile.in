@@ -3,6 +3,10 @@
 #                          Unix Makefile for libmpdec++
 # ==============================================================================
 
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+libdir = @libdir@
+
 ENABLE_STATIC = @ENABLE_STATIC@
 ENABLE_SHARED = @ENABLE_SHARED@
 ENABLE_MINGW = @ENABLE_MINGW@

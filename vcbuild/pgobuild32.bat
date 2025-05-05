@@ -15,10 +15,10 @@ copy /y Makefile.vc Makefile
 nmake clean
 nmake MACHINE=ppro profile
 
-copy /y "libmpdec-4.0.0.lib" ..\vcbuild\dist32
-copy /y "libmpdec-4.0.0.dll" ..\vcbuild\dist32
-copy /y "libmpdec-4.0.0.dll.lib" ..\vcbuild\dist32
-copy /y "libmpdec-4.0.0.dll.exp" ..\vcbuild\dist32
+copy /y "libmpdec-4.0.1.lib" ..\vcbuild\dist32
+copy /y "libmpdec-4.0.1.dll" ..\vcbuild\dist32
+copy /y "libmpdec-4.0.1.dll.lib" ..\vcbuild\dist32
+copy /y "libmpdec-4.0.1.dll.exp" ..\vcbuild\dist32
 copy /y "mpdecimal.h" ..\vcbuild\dist32
 
 
@@ -27,10 +27,10 @@ copy /y Makefile.vc Makefile
 nmake clean
 nmake
 
-copy /y "libmpdec++-4.0.0.lib" ..\vcbuild\dist32
-copy /y "libmpdec++-4.0.0.dll" ..\vcbuild\dist32
-copy /y "libmpdec++-4.0.0.dll.lib" ..\vcbuild\dist32
-copy /y "libmpdec++-4.0.0.dll.exp" ..\vcbuild\dist32
+copy /y "libmpdec++-4.0.1.lib" ..\vcbuild\dist32
+copy /y "libmpdec++-4.0.1.dll" ..\vcbuild\dist32
+copy /y "libmpdec++-4.0.1.dll.lib" ..\vcbuild\dist32
+copy /y "libmpdec++-4.0.1.dll.exp" ..\vcbuild\dist32
 copy /y "decimal.hh" ..\vcbuild\dist32
 
 

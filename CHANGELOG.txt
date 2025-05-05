@@ -3,6 +3,28 @@
 Changelog
 =========
 
+Version 4.0.1
+-------------
+
+build/install
+~~~~~~~~~~~~~
+
+    **features**
+
+    - Add Cygwin support.
+
+    - Update config.guess and config.sub to the latest versions.
+
+    **build fixes**
+
+    - Fix pkg-config files for custom paths.
+
+    - Set LD/LDXX unconditionally to CC/CXX, since LDFLAGS/LDXXFLAGS from
+      ./configure rely on it.
+
+    - macOS: use libdir instead of RPATH for the install_name.
+
+
 Version 4.0.0
 -------------
 

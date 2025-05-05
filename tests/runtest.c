@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2024 Stefan Krah. All rights reserved.
+ * Copyright (c) 2008-2025 Stefan Krah. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -5570,12 +5570,12 @@ main(int argc, char *argv[])
     }
 
     /* Test version */
-    if (strcmp(mpd_version(), "4.0.0") != (0)) {
-        fputs("runtest: error: mpd_version() != 4.0.0\n", stderr);
+    if (strcmp(mpd_version(), "4.0.1") != (0)) {
+        fputs("runtest: error: mpd_version() != 4.0.1\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (strcmp(MPD_VERSION, "4.0.0") != (0)) {
-        fputs("runtest: error: MPD_VERSION != 4.0.0\n", stderr);
+    if (strcmp(MPD_VERSION, "4.0.1") != (0)) {
+        fputs("runtest: error: MPD_VERSION != 4.0.1\n", stderr);
         exit(EXIT_FAILURE);
     }
 
@@ -5591,12 +5591,12 @@ main(int argc, char *argv[])
         fputs("runtest: error: MPD_MINOR_VERSION != 0\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (MPD_MICRO_VERSION != (0)) {
-        fputs("runtest: error: MPD_MICRO_VERSION != 0\n", stderr);
+    if (MPD_MICRO_VERSION != (1)) {
+        fputs("runtest: error: MPD_MICRO_VERSION != 1\n", stderr);
         exit(EXIT_FAILURE);
     }
-    if (MPD_VERSION_HEX != (0x04000000)) {
-        fputs("runtest: error: MPD_VERSION_HEX != 0x04000000\n", stderr);
+    if (MPD_VERSION_HEX != (0x4000100)) {
+        fputs("runtest: error: MPD_VERSION_HEX != 0x4000100\n", stderr);
         exit(EXIT_FAILURE);
     }
 #ifdef _MSC_VER

@@ -3,9 +3,9 @@
 #                 Visual C (nmake) Makefile for libmpdec
 # ======================================================================
 
-LIBSTATIC = libmpdec-4.0.0.lib
-LIBIMPORT = libmpdec-4.0.0.dll.lib
-LIBSHARED = libmpdec-4.0.0.dll
+LIBSTATIC = libmpdec-4.0.1.lib
+LIBIMPORT = libmpdec-4.0.1.dll.lib
+LIBSHARED = libmpdec-4.0.1.dll
 
 MPD_HEADER = mpdecimal32vc.h
 MPD_PREC = 9
