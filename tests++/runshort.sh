@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/sw/bash/bin/bash
 
 SYSTEM=`uname -s`
 case $SYSTEM in

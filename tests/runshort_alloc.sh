@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/sw/bash/bin/bash
 
 # malloc() on OS X does not conform to the C standard.
 SYSTEM=`uname -s`

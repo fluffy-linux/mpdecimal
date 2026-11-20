@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/sw/bash/bin/bash
 
 if [ ! -d testdata ]; then
     mkdir testdata
